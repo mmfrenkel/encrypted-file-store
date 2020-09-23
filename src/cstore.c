@@ -33,13 +33,17 @@ int main(int argc, char *argv[]) {
 
 				FileContent *fc = get_file(request->files[i]);
 				printf("%s", fc->contents);
+
+				get_padded_plaintext(fc->contents, fc->size);
 		}
 	}
 
-	printf("ARCHIVE EXISTS: %s\n", archive_exists(ARCHIVE_DIR, request->archive) ? "true" : "false");
+	//printf("ARCHIVE EXISTS: %s\n", archive_exists(ARCHIVE_DIR, request->archive) ? "true" : "false");
 
-	char* new_arch_path = create_archive_folder(ARCHIVE_DIR, "meg_test");
-	printf("%s\n", new_arch_path);
+	//char* new_arch_path = create_archive_folder(ARCHIVE_DIR, "meg_test");
+	//printf("%s\n", new_arch_path);
+
+	// BYTE *key = convert_password_to_cryptographic_key(request->password);
 
 	return 0;
 }
