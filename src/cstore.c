@@ -10,6 +10,7 @@
 
 #include "cstore.h"
 #include "user_io.h"
+#include "file_io.h"
 #include "encryption.h"
 
 
@@ -34,6 +35,11 @@ int main(int argc, char *argv[]) {
 				printf("%s", fc->contents);
 		}
 	}
+
+	printf("ARCHIVE EXISTS: %s\n", archive_exists(ARCHIVE_DIR, request->archive) ? "true" : "false");
+
+	char* new_arch_path = create_archive_folder(ARCHIVE_DIR, "meg_test");
+	printf("%s\n", new_arch_path);
 
 	return 0;
 }
