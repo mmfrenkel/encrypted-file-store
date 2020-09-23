@@ -13,6 +13,8 @@
 #include "user_io.h"
 
 char *VALID_COMMANDS[] = { "list", "add", "extract", "delete" };
+char *COMMANDS_WO_PW[] = { "list" };
+char *COMMANDS_W_FILES[] = {"add", "extract", "delete" };
 
 /**
  *
@@ -26,10 +28,12 @@ Request* init_request() {
 	}
 
 	request->archive = NULL;
-	request->files = NULL;
 	request->password = NULL;
 	request->subcommand = NULL;
+	request->n_files = 0;
 
+	char *files[MAX_N_FILES] = { NULL };
+	request->files = files;
 	return request;
 }
 
@@ -73,7 +77,7 @@ Request* parse_request(int argc, char *argv[]) {
 	// if necessary, parse password, either from command line submissions or new request
 	if (password_required(subcommand)) {
 		if (!(request->password = get_password(argc, argv))) {
-			printf("Unable to get password from user.\n");
+			printf("Unable to obtain password from user.\n");
 
 			free_request(request);
 			return NULL;
@@ -85,7 +89,7 @@ Request* parse_request(int argc, char *argv[]) {
 		printf("Insufficient arguments for subcommand %s; please "
 				"make sure to provide an archive name.\n", subcommand);
 
-		free(request);
+		free_request(request);
 		return NULL;
 	}
 
@@ -95,9 +99,10 @@ Request* parse_request(int argc, char *argv[]) {
 			printf("Expected at least one filename for subcommand: "
 					"%s", subcommand);
 
-			free(request);
+			free_request(request);
 			return NULL;
 		}
+		request->n_files = count_files(request->files);
 	}
 	return request;
 }
@@ -106,18 +111,22 @@ Request* parse_request(int argc, char *argv[]) {
  *
  */
 bool password_required(char *subcommand) {
-	if (strcmp(subcommand, VALID_COMMANDS[0])) {
-		return true;
+	for (int i = 0; i < N_COMMANDS_WO_PW; i++) {
+		if (strcmp(subcommand, COMMANDS_WO_PW[i]) == 0)  {
+			return false;
+		}
 	}
-	return false;
+	return true;
 }
 
 /**
  *
  */
 bool filename_required(char *subcommand) {
-	if (strcmp(subcommand, VALID_COMMANDS[0])) {
-		return true;
+	for (int i = 0; i < N_COMMANDS_W_FILES; i++) {
+		if (strcmp(subcommand, COMMANDS_W_FILES[i]) == 0)  {
+			return true;
+		}
 	}
 	return false;
 }
@@ -159,7 +168,7 @@ bool user_submitted_pw(int argc, char *argv[]) {
 char* get_password(int argc, char *argv[]) {
 
 	if (user_submitted_pw(argc, argv)) {
-		// user is attempting to pass password via command line
+		// user attempted to pass password via command line
 		return argv[PW_FLAG_INDX + 1];
 	}
 
@@ -170,7 +179,7 @@ char* get_password(int argc, char *argv[]) {
 		return NULL;
 	}
 
-	password = getpass("Provide your password: ");
+	password = getpass("Please provide your password: ");
 	return password;
 }
 
@@ -205,8 +214,8 @@ char** extract_filenames(int argc, char *argv[]) {
 
 	// user passed more files that is currently supported; they will be warned
 	if (argc - filename_idx > MAX_N_FILES) {
-		printf("WARNING: Only %d files are accepted each each round.",
-				MAX_N_FILES);
+		printf("WARNING: Only %d files are accepted in each round; you submitted %d files.",
+				MAX_N_FILES, argc - filename_idx);
 	}
 
 	char **filenames = (char**) malloc(sizeof(char*) * MAX_N_FILES);
@@ -214,9 +223,22 @@ char** extract_filenames(int argc, char *argv[]) {
 	for (int i = filename_idx; i < argc; i++) {
 		if (curr_idx < MAX_N_FILES) {
 			filenames[curr_idx] = argv[i];
+			curr_idx++;
 		}
 	}
 	return filenames;
+}
+
+/**
+ *
+ */
+int count_files(char *filenames[]) {
+
+	int i = 0;
+	while (i < MAX_N_FILES && filenames[i]) {
+		i++;
+	}
+	return i;
 }
 
 /**

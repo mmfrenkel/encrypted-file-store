@@ -10,6 +10,7 @@
 
 #include "cstore.h"
 #include "user_io.h"
+#include "encryption.h"
 
 
 int main(int argc, char *argv[]) {
@@ -20,8 +21,19 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
-	printf("Subcommand: %s, Password: %s, Archive: %s, Filename: \n",
+	printf("Subcommand: %s, Password: %s, Archive: %s\n",
 			request->subcommand, request->password, request->archive);
+
+	printf("Found %d files...\n", request->n_files);
+
+	if (request->n_files > 0) {
+		for (int i = 0; i < request->n_files; i++) {
+				printf("File: %s\n", request->files[i]);
+
+				FileContent *fc = get_file(request->files[i]);
+				printf("%s", fc->contents);
+		}
+	}
 
 	return 0;
 }

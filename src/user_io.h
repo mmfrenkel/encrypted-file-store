@@ -15,7 +15,9 @@
 #define ARCH_INDX 2
 #define FILE_INDX 3
 #define MAX_N_FILES 10
-#define N_COMMANDS 5
+#define N_COMMANDS 4
+#define N_COMMANDS_WO_PW 1
+#define N_COMMANDS_W_FILES 3
 #define COMMAND_IDX 1
 #define PW_BUFFER 100
 
@@ -24,6 +26,7 @@ typedef struct request {
 	char *password;
 	char *archive;
 	char **files;
+	int n_files;
 } Request;
 
 Request* init_request();
@@ -45,6 +48,8 @@ char* get_password(int argc, char *argv[]);
 char* extract_archive_name(int argc, char *argv[]);
 
 char** extract_filenames(int argc, char *argv[]);
+
+int count_files(char *filenames[]);
 
 void print_subcommand_options();
 
