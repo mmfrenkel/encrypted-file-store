@@ -4,4 +4,5 @@
 bin/
 obj/
 Debug/
+.DS_Store
 
