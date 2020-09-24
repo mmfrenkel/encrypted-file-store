@@ -12,7 +12,7 @@
 
 #include "user_io.h"
 
-char *VALID_COMMANDS[] = { LIST, ADD, EXTRACT, DELETE};
+char *VALID_COMMANDS[] = { LIST, ADD, EXTRACT, DELETE };
 char *COMMANDS_WO_PW[] = { LIST };
 char *COMMANDS_W_FILES[] = { ADD, EXTRACT, DELETE };
 
@@ -97,7 +97,7 @@ Request* parse_request(int argc, char *argv[]) {
 	if (filename_required(subcommand)) {
 		if (!(request->files = extract_filenames(argc, argv))) {
 			printf("Expected at least one filename for subcommand: "
-					"%s", subcommand);
+					"%s. Or perhaps you forgot to include the archive name?\n", subcommand);
 
 			free_request(request);
 			return NULL;
@@ -112,7 +112,7 @@ Request* parse_request(int argc, char *argv[]) {
  */
 bool password_required(char *subcommand) {
 	for (int i = 0; i < N_COMMANDS_WO_PW; i++) {
-		if (strcmp(subcommand, COMMANDS_WO_PW[i]) == 0)  {
+		if (strcmp(subcommand, COMMANDS_WO_PW[i]) == 0) {
 			return false;
 		}
 	}
@@ -124,7 +124,7 @@ bool password_required(char *subcommand) {
  */
 bool filename_required(char *subcommand) {
 	for (int i = 0; i < N_COMMANDS_W_FILES; i++) {
-		if (strcmp(subcommand, COMMANDS_W_FILES[i]) == 0)  {
+		if (strcmp(subcommand, COMMANDS_W_FILES[i]) == 0) {
 			return true;
 		}
 	}
@@ -142,7 +142,7 @@ char* extract_subcommand(int argc, char *argv[]) {
 			int len_str = strlen(argv[COMMAND_IDX]);
 
 			// we found a value subcommand
-			char *subcommand = (char *) malloc(sizeof(char) * len_str + 1);
+			char *subcommand = (char*) malloc(sizeof(char) * len_str + 1);
 			memcpy(subcommand, argv[COMMAND_IDX], len_str + 1);
 			return subcommand;
 		}
@@ -194,7 +194,8 @@ char* extract_archive_name(int argc, char *argv[]) {
 
 	// if the user submitted a password, then we can expect that the field
 	// for archive name is at a different location than w/o password
-	int archive_name_idx = user_submitted_pw(argc, argv) ? ARCH_INDX + 2 : ARCH_INDX;
+	int archive_name_idx =
+			user_submitted_pw(argc, argv) ? ARCH_INDX + 2 : ARCH_INDX;
 
 	if (argc < archive_name_idx + 1) {
 		// user didn't provide enough information
@@ -202,7 +203,7 @@ char* extract_archive_name(int argc, char *argv[]) {
 	}
 
 	int len_archive_name = strlen(argv[archive_name_idx]);
-	char *archive = (char *) malloc(sizeof(char) * (len_archive_name + 1));
+	char *archive = (char*) malloc(sizeof(char) * (len_archive_name + 1));
 	if (!archive) {
 		printf("Failed to allocate memroy for archive");
 		return NULL;
@@ -218,7 +219,8 @@ char* extract_archive_name(int argc, char *argv[]) {
 char** extract_filenames(int argc, char *argv[]) {
 	// if the user submitted a password, then we can expect that the field
 	// for filename is at a different location than w/o password
-	int filename_idx = user_submitted_pw(argc, argv) ? FILE_INDX + 2 : FILE_INDX;
+	int filename_idx =
+			user_submitted_pw(argc, argv) ? FILE_INDX + 2 : FILE_INDX;
 
 	if (argc < filename_idx + 1) {
 		return NULL;   // user didn't provide filenames
@@ -231,7 +233,9 @@ char** extract_filenames(int argc, char *argv[]) {
 	}
 
 	// how many files were submitted?
-	int num_files = MAX_N_FILES > argc - filename_idx ? argc - filename_idx : MAX_N_FILES;
+	int num_files =
+			MAX_N_FILES > argc - filename_idx ?
+					argc - filename_idx : MAX_N_FILES;
 	char **filenames = (char**) malloc(sizeof(char*) * num_files);
 	if (!filenames) {
 		printf("Could not parse and store submitted filenames because of "
@@ -246,10 +250,11 @@ char** extract_filenames(int argc, char *argv[]) {
 		int len_filename = strlen(argv[filename_idx]);
 		printf("Length of filename: %d\n", len_filename);
 
-		char *filename = (char *) malloc(sizeof(char) * (len_filename + 1));
+		char *filename = (char*) malloc(sizeof(char) * (len_filename + 1));
 		if (!filename) {
 			printf("Failed to allocate memory for filename.\n");
-			for (int j = 0; j < curr_idx; j ++) free(filenames[j]);
+			for (int j = 0; j < curr_idx; j++)
+				free(filenames[j]);
 			free(filenames);
 			return NULL;
 		}
@@ -270,7 +275,8 @@ char** extract_filenames(int argc, char *argv[]) {
 int count_files(char *filenames[]) {
 
 	int i = 0;
-	while (i < MAX_N_FILES && filenames[i]) i++;
+	while (i < MAX_N_FILES && filenames[i])
+		i++;
 
 	return i;
 }

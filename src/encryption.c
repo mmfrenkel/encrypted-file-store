@@ -32,12 +32,12 @@ BYTE* convert_password_to_cryptographic_key(char *pt_password) {
 
 	// make this temporary memory allocation, as to not delete original pw
 	int len_pt_pw = strlen(pt_password);
-	temp = (BYTE *) malloc(sizeof(unsigned char) * (len_pt_pw + 1));
+	temp = (BYTE*) malloc(sizeof(unsigned char) * (len_pt_pw + 1));
 	if (!temp) {
 		printf("Failed to allocate memory for temporary hash storage.\n ");
 		return NULL;
 	}
-	strncpy((char *) temp, pt_password, len_pt_pw);
+	strncpy((char* ) temp, pt_password, len_pt_pw);
 
 	// repeatedly run sha-256 hash function
 	for (int i = 0; i < PW_CRYPT_ITER; i++) {
@@ -50,10 +50,10 @@ BYTE* convert_password_to_cryptographic_key(char *pt_password) {
 		temp = new_hash;
 	}
 
-    for (size_t i = 0; i < SHA256_BLOCK_SIZE; i++) {
-    	printf("%x", temp[i] & 0xff);  // trick to print out unsigned hex
-    }
-    printf("\n");
+	for (size_t i = 0; i < SHA256_BLOCK_SIZE; i++) {
+		printf("%x", temp[i] & 0xff);  // trick to print out unsigned hex
+	}
+	printf("\n");
 	return temp;
 }
 
@@ -121,13 +121,11 @@ int ecb_aes_encrypt(FileContent *fcontent, BYTE *key) {
 	}
 
 	/* ----- setup ---- */
-	// figure out how many blocks (iterations of AES we need)
-	int n_blocks = (fcontent->n_plaintext_bytes / AES_BLOCK_SIZE) + 1;
+	int n_blocks = (fcontent->n_plaintext_bytes / AES_BLOCK_SIZE) + 1;          // how many AES blocks do we need?
 	int ciphertext_size = n_blocks * AES_BLOCK_SIZE;
+	WORD key_schedule[60];  													// taken from implementer's tests
 
-	WORD key_schedule[60];  // taken from implementer's tests
-
-	BYTE buf_in[AES_BLOCK_SIZE], buf_out[AES_BLOCK_SIZE];
+	BYTE buf_in[AES_BLOCK_SIZE], buf_out[AES_BLOCK_SIZE];                		// intermediate buffers
 
 	BYTE *ciphertext = (BYTE*) malloc(sizeof(BYTE) * ciphertext_size);
 	if (!ciphertext) {
@@ -136,27 +134,20 @@ int ecb_aes_encrypt(FileContent *fcontent, BYTE *key) {
 		return -1;
 	}
 
-	// key setup step performs generates keys that are used in encryption rounds
-	aes_key_setup(key, key_schedule, KEY_SIZE);
+	aes_key_setup(key, key_schedule, KEY_SIZE);									// performs generates keys that are used in encryption rounds
 
 	/** --- do the encryption --- **/
 	for (int i = 0; i < n_blocks; i++) {
 
-		// copy next block into buf_in; this will be encrypted
-		memcpy(buf_in, &padded_plaintext[i * AES_BLOCK_SIZE], AES_BLOCK_SIZE);
+		memcpy(buf_in, &padded_plaintext[i * AES_BLOCK_SIZE], AES_BLOCK_SIZE);  // copy next block into buf_in; this will be encrypted
 
-		// AES step, saving to buf_out
-		aes_encrypt(buf_in, buf_out, key_schedule, KEY_SIZE);
+		aes_encrypt(buf_in, buf_out, key_schedule, KEY_SIZE);                   // AES step, saving to buf_out
 
-		// move the results of buf_out into the final
-		memcpy(&ciphertext[i * AES_BLOCK_SIZE], buf_out, AES_BLOCK_SIZE);
+		memcpy(&ciphertext[i * AES_BLOCK_SIZE], buf_out, AES_BLOCK_SIZE);       // move the results of buf_out into the final
 	}
 
-	if (fcontent->ciphertext)
-		free(fcontent->ciphertext);
 	fcontent->ciphertext = ciphertext;
 	fcontent->n_ciphertext_bytes = ciphertext_size;
-
 	return 0;
 }
 
@@ -166,30 +157,27 @@ int ecb_aes_encrypt(FileContent *fcontent, BYTE *key) {
  */
 int ecb_aes_decrypt(FileContent *fcontent, BYTE *key) {
 
-	/* --- setup --- */
-	WORD key_schedule[60];   // taken from implementer's tests
-
-	int n_blocks = fcontent->n_ciphertext_bytes / AES_BLOCK_SIZE;
-	int size = n_blocks * AES_BLOCK_SIZE;
 	unsigned char *ciphertext = fcontent->ciphertext;
 
-	BYTE buf_in[AES_BLOCK_SIZE], buf_out[AES_BLOCK_SIZE], pt_buffer[size];
+	/* --- setup --- */
+	WORD key_schedule[60];   													// taken from implementer's tests
+	int n_blocks = fcontent->n_ciphertext_bytes / AES_BLOCK_SIZE;           	// how many AES blocks do we need?
+	int size = n_blocks * AES_BLOCK_SIZE;
 
-	// key setup step performs generates keys that are used in encryption rounds
-	aes_key_setup(key, key_schedule, KEY_SIZE);
+	BYTE buf_in[AES_BLOCK_SIZE], buf_out[AES_BLOCK_SIZE], pt_buffer[size];  	// intermediate buffers
+
+	aes_key_setup(key, key_schedule, KEY_SIZE);									// performs generates keys that are used in encryption rounds
 
 	/** --- do the decryption --- **/
 	for (int i = 0; i < n_blocks; i++) {
 
-		// copy next block into buf_in; this will be encrypted
-		memcpy(buf_in, &ciphertext[i * AES_BLOCK_SIZE], AES_BLOCK_SIZE);
+		memcpy(buf_in, &ciphertext[i * AES_BLOCK_SIZE], AES_BLOCK_SIZE);  		// copy next block into buf_in; this will be encrypted
 
-		// AES step, saving to buf_out
-		aes_decrypt(buf_in, buf_out, key_schedule, KEY_SIZE);
+		aes_decrypt(buf_in, buf_out, key_schedule, KEY_SIZE);             		// AES step, saving to buf_out
 
-		// move the results of buf_out into the final
-		memcpy(&pt_buffer[i * AES_BLOCK_SIZE], buf_out, AES_BLOCK_SIZE);
+		memcpy(&pt_buffer[i * AES_BLOCK_SIZE], buf_out, AES_BLOCK_SIZE);  		// move the results of buf_out into the final
 	}
+
 	// the padding is held in the last BYTE of the decrypted buffer; this allows us to determine
 	// how many ACTUAL bytes of plaintext we started with
 	int n_bytes_plaintext = size - pt_buffer[size - 1];
@@ -204,11 +192,8 @@ int ecb_aes_decrypt(FileContent *fcontent, BYTE *key) {
 	memcpy(plaintext, pt_buffer, n_bytes_plaintext);
 	memcpy(plaintext + n_bytes_plaintext, "\0", 1);
 
-	if (fcontent->plaintext)
-		free(fcontent->plaintext);
 	fcontent->plaintext = plaintext;
 	fcontent->n_plaintext_bytes = n_bytes_plaintext;
-
 	return 0;
 }
 

@@ -24,8 +24,8 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
-	printf("User selected subcommand: %s for archive: %s\n", request->subcommand, request->archive);
-
+	printf("User selected subcommand: %s for archive: %s\n",
+			request->subcommand, request->archive);
 
 	if (strncmp(LIST, request->subcommand, strlen(LIST)) == 0) {
 		error = cstore_list(request);
@@ -75,7 +75,7 @@ int cstore_add(Request *request) {
 		create_archive_folder(ARCHIVE_DIR, request->archive);
 	}
 
-	if (!(key = convert_password_to_cryptographic_key(request->password))){
+	if (!(key = convert_password_to_cryptographic_key(request->password))) {
 		printf("Couldn't convert password to cryptographic key");
 		return -1;
 	}
@@ -101,9 +101,11 @@ int cstore_add(Request *request) {
 
 		// delete the original file
 		if (delete_file(request->files[i])) {
-			printf("Encryption step succeeded, but could not remove original, unencrypted file.\n");
+			printf(
+					"Encryption step succeeded, but could not remove original, unencrypted file.\n");
 		}
-		printf("Succesfully encrypted %s within archive %s\n", fc->filename, request->archive);
+		printf("Succesfully encrypted %s within archive %s\n", fc->filename,
+				request->archive);
 	}
 	return 0;
 }
@@ -126,7 +128,7 @@ int cstore_extract(Request *request) {
 		return 0;
 	}
 
-	if (!(key = convert_password_to_cryptographic_key(request->password))){
+	if (!(key = convert_password_to_cryptographic_key(request->password))) {
 		printf("Couldn't convert password to cryptographic key");
 		return -1;
 	}
@@ -134,18 +136,20 @@ int cstore_extract(Request *request) {
 	// add list of files to archive
 	for (int i = 0; i < request->n_files; i++) {
 
-		FileContent* fc = get_encrypted_file(ARCHIVE_DIR, request->archive, request->files[i]);
+		FileContent *fc = get_encrypted_file(ARCHIVE_DIR, request->archive,
+				request->files[i]);
 
 		if ((error = ecb_aes_decrypt(fc, key))) {
 			printf("There was an error performing decryption.\n");
 		}
 
 		if ((error = write_plaintext_to_file(fc))) {
-		 	printf("Couldn't write plaintext to file.\n");
+			printf("Couldn't write plaintext to file.\n");
 		}
 
-		printf("Succesfully decrypted %s from archive %s and saved to unencrpyted "
-				"file.", fc->filename, request->archive);
+		printf(
+				"Succesfully decrypted %s from archive %s and saved to unencrpyted "
+						"file.\n", fc->filename, request->archive);
 	}
 	return 0;
 
@@ -168,7 +172,7 @@ int cstore_delete(Request *request) {
 		return 0;
 	}
 
-	if (!(key = convert_password_to_cryptographic_key(request->password))){
+	if (!(key = convert_password_to_cryptographic_key(request->password))) {
 		printf("Couldn't convert password to cryptographic key");
 		return -1;
 	}

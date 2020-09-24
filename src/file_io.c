@@ -16,7 +16,6 @@
 
 #include "file_io.h"
 
-
 /* ----- methods that shouldn't be called externally ---- */
 
 char* get_home_dir();
@@ -35,25 +34,24 @@ int write_content_to_file(char *file_path, BYTE *content, size_t n_bytes,
 		char *write_mode);
 
 FileContent* extract_file_content(char *filename, char *file_path,
-		bool is_encrypted);
+bool is_encrypted);
 
 /* ------------------------------------------------------ */
-
 
 /**
  * Find if an archive exists in the archive directory.
  */
 bool archive_exists(char *archive_base_path, char *archive_name) {
 
-	struct dirent *de;
 	bool found = false;
-	char *archive_dir;
 
+	char *archive_dir;
 	if (!(archive_dir = get_absolute_path_archive(archive_base_path))) {
 		printf("Could not construct archive path.\n");
 		exit(1);
 	}
 
+	struct dirent *de;
 	DIR *dir = opendir(archive_dir);
 	if (!dir) {
 		printf("Could not find the base archive location %s; run 'make base_archive' "
@@ -62,7 +60,6 @@ bool archive_exists(char *archive_base_path, char *archive_name) {
 	}
 
 	while ((de = readdir(dir)) != NULL) {
-		printf("FOUND %s\n", de->d_name);
 		if (strncmp(de->d_name, archive_name, strlen(archive_name)) == 0) {
 			found = true;
 			break;
@@ -80,14 +77,20 @@ bool archive_exists(char *archive_base_path, char *archive_name) {
  */
 int list_archive_files(char *archive_base_path, char *archive_name) {
 
-	struct dirent *de;
-	char *archive_dir;
-
-	if (!(archive_dir = get_absolute_path_archive(archive_base_path))) {
-		printf("Could construct path of archive.\n");
+	char *base_path;
+	if (!(base_path = get_absolute_path_archive(archive_base_path))) {
+		printf("Could not find base path of all archives.\n");
 		return -1;
 	}
 
+	char *archive_dir = concat_path(base_path, archive_name);
+	free(base_path);  // no longer need this intermediate path
+	if (!archive_dir) {
+		printf("Could not construct path for requested archive: %s.\n",archive_name);
+		return -1;
+	}
+
+	struct dirent *de;
 	DIR *dir = opendir(archive_dir);
 	if (!dir) {
 		printf("Could not find the base archive location %s; run 'make base_archive' "
@@ -96,8 +99,20 @@ int list_archive_files(char *archive_base_path, char *archive_name) {
 		return -1;
 	}
 
+	printf("Files currently encrypted within %s:\n", archive_name);
+	int count_files = 0;
 	while ((de = readdir(dir)) != NULL) {
-		printf("* %s\n", de->d_name);
+
+		// we don't need to see the . and .. content in dir
+		if (strcmp(".", de->d_name) && strcmp("..", de->d_name)) {
+			printf("*  %s\n", de->d_name);
+			count_files++;
+		}
+	}
+
+	// give clarity to user; if there are no files in the archive, then say so.
+	if (!count_files) {
+		printf("* No files are in this archive yet.\n");
 	}
 
 	// clean-up
@@ -113,7 +128,7 @@ char* create_archive_folder(char *arch_base_path, char *archive_name) {
 
 	int error;
 	// 0700 to provide owner rights only
-	if ((error = mkdir(new_archive_dir, 0700))){
+	if ((error = mkdir(new_archive_dir, 0700))) {
 		printf("Failed to create the new archive. Please try again.\n");
 		exit(1);
 	}
@@ -165,12 +180,14 @@ FileContent* get_encrypted_file(char *base_path, char *archive, char *filename) 
 /**
  *
  */
-int write_ciphertext_to_file(char *base_path, char *archive, FileContent *fcontent) {
+int write_ciphertext_to_file(char *base_path, char *archive,
+		FileContent *fcontent) {
 
 	int error;
 	char *file_path;
 
-	if (!(file_path = get_full_filepath_in_archive(base_path, archive, fcontent->filename))) {
+	if (!(file_path = get_full_filepath_in_archive(base_path, archive,
+			fcontent->filename))) {
 		printf("Issue encountered creating the full file path.\n");
 		return -1;
 	}
@@ -239,7 +256,8 @@ FileContent* init_file_content(char *filename, BYTE *content,
  * https://stackoverflow.com/questions/22059189/read-a-file-as-byte-array
  * https://www.tutorialspoint.com/c_standard_library/c_function_ftell.htm
  */
-FileContent* extract_file_content(char *filename, char *file_path, bool is_encrypted) {
+FileContent* extract_file_content(char *filename, char *file_path,
+		bool is_encrypted) {
 
 	printf("File: %s...\n", file_path);
 	FILE *fp = fopen(file_path, "rb");          // open file in binary mode
@@ -328,11 +346,10 @@ char* get_absolute_path_archive(char *rel_arc_base_path) {
 	return absolute_dir;
 }
 
-
 /**
  *
  */
-char* concat_path(char * str1, char *str2) {
+char* concat_path(char *str1, char *str2) {
 
 	// get the full path of the archive
 	int len1 = strlen(str1);
@@ -364,7 +381,7 @@ char* get_full_filepath_in_archive(char *base_path, char *archive,
 
 	archive_dir = concat_path(abs_base_dir, archive);
 	free(abs_base_dir);
-	if (!archive_dir){
+	if (!archive_dir) {
 		return NULL;
 	}
 

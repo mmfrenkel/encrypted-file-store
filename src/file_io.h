@@ -28,11 +28,13 @@ char* create_archive_folder(char *arch_base_path, char *archive_name);
 
 FileContent* get_plaintext_file(char *filename);
 
-FileContent* get_encrypted_file(char *base_path, char *archive_name, char *filename);
+FileContent* get_encrypted_file(char *base_path, char *archive_name,
+		char *filename);
 
 int write_plaintext_to_file(FileContent *fcontent);
 
-int write_ciphertext_to_file(char *base_path, char *archive, FileContent *fcontent);
+int write_ciphertext_to_file(char *base_path, char *archive,
+		FileContent *fcontent);
 
 int delete_file(char *file_path);
 
