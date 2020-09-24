@@ -184,12 +184,7 @@ int ecb_aes_decrypt(FileContent *fcontent, BYTE *key) {
 	unsigned char *ciphertext = fcontent->ciphertext;
 
 	BYTE buf_in[AES_BLOCK_SIZE], buf_out[AES_BLOCK_SIZE];
-
-	BYTE *plaintext = (BYTE *) malloc(sizeof(BYTE) * size);
-	if (!plaintext) {
-		printf("Could not decrypt AES ciphertext because plaintext message could not be allocated.\n");
-		return -1;
-	}
+	BYTE *pt_buffer[size];
 
 	// key setup step performs generates keys that are used in encryption rounds
 	aes_key_setup(key, key_schedule, KEY_SIZE);
@@ -204,15 +199,28 @@ int ecb_aes_decrypt(FileContent *fcontent, BYTE *key) {
 		aes_decrypt(buf_in, buf_out, key_schedule, KEY_SIZE);
 
 		// move the results of buf_out into the final
-		memcpy(&plaintext[i * AES_BLOCK_SIZE], buf_out, AES_BLOCK_SIZE);
+		memcpy(&pt_buffer[i * AES_BLOCK_SIZE], buf_out, AES_BLOCK_SIZE);
 	}
+
+	// find the padding and remove it for the final plaintext
+	int padding = (int) pt_buffer[size - 1];
+	printf("PADDING WAS %d\n", padding);
+	int n_bytes_plaintext = size - padding;
+
+	BYTE* plaintext = (BYTE *) malloc(sizeof(BYTE) * n_bytes_plaintext);
+	if (!plaintext) {
+		printf("Could not decrypt AES ciphertext because plaintext message could not be allocated.\n");
+		return -1;
+	}
+	memcpy(plaintext, pt_buffer, n_bytes_plaintext);
 
 	if (fcontent->plaintext) {
 		free(fcontent->plaintext);
 	}
 	fcontent->plaintext = plaintext;
-	fcontent->n_plaintext_bytes = strlen(plaintext);
-	printf("DECRYPT: Ciphertext Size: %lu, Plaintext Size: %lu\n", fcontent->n_ciphertext_bytes, strlen(plaintext));
+	fcontent->n_plaintext_bytes = n_bytes_plaintext;
+
+	printf("DECRYPT: Ciphertext Size: %lu, Plaintext Size: %d\n", fcontent->n_ciphertext_bytes, n_bytes_plaintext);
 
 	printf("The last digit value is %x, %d\n", plaintext[size -1], plaintext[size -1]);
 
