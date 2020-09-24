@@ -17,9 +17,9 @@ BYTE* convert_password_to_cryptographic_key(char *pt_password);
 
 BYTE* hash_sha_256(BYTE *text, int len_pt);
 
-BYTE* get_padded_plaintext(BYTE *pt, int len_pt);
+BYTE* create_padded_plaintext(BYTE *pt, int len_pt);
 
-int ecb_aes_encrypt();
+BYTE* ecb_aes_encrypt(BYTE *plaintext, int len_pt, BYTE *key);
 
 int aes_decrypt_file(char *filename);
 

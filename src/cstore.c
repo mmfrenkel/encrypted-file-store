@@ -34,7 +34,12 @@ int main(int argc, char *argv[]) {
 				FileContent *fc = get_file(request->files[i]);
 				printf("%s", fc->contents);
 
-				get_padded_plaintext(fc->contents, fc->size);
+				create_padded_plaintext(fc->contents, fc->size);
+
+				BYTE *key = convert_password_to_cryptographic_key(request->password);
+
+				ecb_aes_encrypt(fc->contents, fc->size, key);
+
 		}
 	}
 
