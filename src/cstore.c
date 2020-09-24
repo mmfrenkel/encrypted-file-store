@@ -56,7 +56,7 @@ int main(int argc, char *argv[]) {
 				}
 
 				if ((error = write_plaintext_to_file(efc))) {
-					printf("Couldn't write plaintext to file.\n");
+				 	printf("Couldn't write plaintext to file.\n");
 				}
 
 				printf("SUCCESS\n");
