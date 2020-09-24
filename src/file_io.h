@@ -8,28 +8,28 @@
 #ifndef SRC_FILE_IO_H_
 #define SRC_FILE_IO_H_
 
+#include <stdbool.h>
+
 typedef unsigned char BYTE;  // 8-bit byte
 
 typedef struct file_content {
 	char *filename;
-	BYTE *contents;
-	unsigned long size;
+	BYTE *plaintext;
+	unsigned long n_plaintext_bytes;
+	BYTE *ciphertext;
+	unsigned long n_ciphertext_bytes;
 } FileContent;
 
+bool archive_exists(char *rel_arc_base_path, char *archive_name);
 
-char *get_home_dir();
+char* create_archive_folder(char *arch_base_path, char *archive_name);
 
-char* concat_path(char * str1, char *str2);
+FileContent* get_plaintext_file(char *filename);
 
-bool archive_exists(char *archive_base_path, char *archive_name);
+FileContent* get_encrypted_file(char *base_path, char *archive_name, char *filename);
 
-char* create_archive_folder(char *rel_arc_base_path, char *archive_name);
+int write_plaintext_to_file(FileContent *fcontent);
 
-FileContent* init_file_content(char *filename, BYTE *contents,
-		unsigned long n_bytes);
-
-FileContent* get_file(char *filename);
-
-FileContent* extract_file_content(char *filename);
+int write_ciphertext_to_file(char *base_path, char *archive, FileContent *fcontent);
 
 #endif /* SRC_FILE_IO_H_ */

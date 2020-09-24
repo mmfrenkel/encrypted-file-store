@@ -11,6 +11,16 @@
 #include "encryption.h"
 #include "aes.h"
 #include "sha256.h"
+#include "file_io.h"
+
+
+/* ----- methods that shouldn't be called externally ---- */
+
+BYTE* hash_sha_256(BYTE *text, int len_pt);
+
+BYTE* create_padded_plaintext(BYTE *pt, int len_pt, int block_size);
+
+/* ------------------------------------------------------ */
 
 /**
  * Converts key submitted by user into a 32 byte (256 bit) hash via
@@ -22,8 +32,8 @@ BYTE* convert_password_to_cryptographic_key(char *pt_password) {
 
 	// make this temporary memory allocation, as to not delete original pw
 	int len_pt_pw = strlen(pt_password);
-	temp = (BYTE *) malloc(sizeof(unsigned char) * len_pt_pw);
-	strncpy((char *) temp, pt_password, strlen(pt_password));
+	temp = (BYTE *) malloc(sizeof(unsigned char) * (len_pt_pw + 1));
+	strncpy((char *) temp, pt_password, len_pt_pw);
 
 	// repeatedly run sha-256 hash function
 	for (int i = 0; i < PW_CRYPT_ITER; i++) {
@@ -67,13 +77,18 @@ BYTE* hash_sha_256(BYTE *text, int len_pt) {
 /**
  *
  */
-BYTE* create_padded_plaintext(BYTE *pt, int len_pt) {
+BYTE* create_padded_plaintext(BYTE *pt, int len_pt, int block_size) {
 
-	int pad_size = AES_BLOCK_SIZE - (len_pt % AES_BLOCK_SIZE);  // size of pad needed
+	int pad_size = block_size - (len_pt % block_size);  // size of pad needed
 
 	printf("We need a pad of %d; we have %d.\n", pad_size, len_pt);
 
 	BYTE *padded_pt = (BYTE*) malloc(sizeof(BYTE) * (len_pt + pad_size));
+	if (!padded_pt) {
+		printf("Could not create padded plaintext due to issue allocating memory.\n");
+		return NULL;
+	}
+
 	memcpy(padded_pt, pt, len_pt);
 
 	for (int i = 0; i < pad_size; i++) {
@@ -81,14 +96,15 @@ BYTE* create_padded_plaintext(BYTE *pt, int len_pt) {
 		memcpy(&padded_pt[shift], &pad_size, 1);
 	}
 
+	printf("\n\nPlaintext: ");
 	for (int i = 0; i < len_pt; i++) {
 		printf("%x", pt[i] & 0xff);  // trick to print out unsigned hex
 	}
-	printf("\n");
+	printf("\n\nPadded Plaintext: ");
 	for (int i = 0; i < len_pt + pad_size; i++) {
 		printf("%x |", padded_pt[i] & 0xff);  // trick to print out unsigned hex
 	}
-	printf("\n");
+	printf("\n\n");
 
 	return padded_pt;
 }
@@ -101,25 +117,34 @@ BYTE* create_padded_plaintext(BYTE *pt, int len_pt) {
  * First adds padding (in the form of the number of padding chars added),
  * then runs AES over each section of bytes.
  */
-BYTE* ecb_aes_encrypt(BYTE *plaintext, int len_pt, BYTE *key) {
+int ecb_aes_encrypt(FileContent *fcontent, BYTE *key) {
 
-	BYTE *padded_plaintext = create_padded_plaintext(plaintext, len_pt);
+	BYTE *padded_plaintext;
+	if (!(padded_plaintext = create_padded_plaintext(fcontent->plaintext,
+			fcontent->n_plaintext_bytes, AES_BLOCK_SIZE))) {
+		return -1;
+	}
 
+	/* ----- setup ---- */
 	// figure out how many blocks (iterations of AES we need)
-	int n_blocks = len_pt / AES_BLOCK_SIZE;
-	n_blocks = len_pt % AES_BLOCK_SIZE != 0 ? n_blocks + 1 : n_blocks;
-
-	/* --- setup --- */
-	WORD key_schedule[60];                            // taken from implementers tests
+	int n_blocks = (fcontent->n_plaintext_bytes / AES_BLOCK_SIZE) + 1;
 	int ciphertext_size = n_blocks * AES_BLOCK_SIZE;
 
+	WORD key_schedule[60];  // taken from implementer's tests
+
 	BYTE buf_in[AES_BLOCK_SIZE], buf_out[AES_BLOCK_SIZE];
-	BYTE *ciphertext = (BYTE *) malloc(sizeof(BYTE) * ciphertext_size);
+
+	BYTE *ciphertext = (BYTE*) malloc(sizeof(BYTE) * ciphertext_size);
+	if (!ciphertext) {
+		printf("Could not encrypt file %s\n, due to issue allocating memory for ciphertext",
+				fcontent->filename);
+		return -1;
+	}
 
 	// key setup step performs generates keys that are used in encryption rounds
 	aes_key_setup(key, key_schedule, KEY_SIZE);
 
-	/** --- do the thing --- **/
+	/** --- do the encryption --- **/
 	for (int i = 0; i < n_blocks; i++) {
 
 		// copy next block into buf_in; this will be encrypted
@@ -132,34 +157,44 @@ BYTE* ecb_aes_encrypt(BYTE *plaintext, int len_pt, BYTE *key) {
 		memcpy(&ciphertext[i * AES_BLOCK_SIZE], buf_out, AES_BLOCK_SIZE);
 	}
 
-
-	for (int i = 0; i < ciphertext_size; i++) {
-		printf("%x |", ciphertext[i] & 0xff);  // trick to print out unsigned hex
+	if (fcontent->ciphertext) {
+		free(fcontent->ciphertext);
 	}
-	printf("\n");
-	printf("Length of ciphertext: %lu\n", strlen((char *) ciphertext));
-	return ciphertext;
+	fcontent->ciphertext = ciphertext;
+	fcontent->n_ciphertext_bytes = ciphertext_size;
+
+	printf("Ciphertext: ");
+	for (int i = 0; i < ciphertext_size; i++) {
+		printf("%x |", ciphertext[i] & 0xff); // trick to print out unsigned hex
+	}
+	return 0;
 }
+
 
 /**
  * Decrypts AES ciphertext.
  */
-BYTE* ecb_aes_decrypt(BYTE *ciphertext, BYTE *key) {
-
-	// figure out how many blocks (iterations of AES we need)
-	int n_blocks = strlen((char*) ciphertext) / AES_BLOCK_SIZE;
+int ecb_aes_decrypt(FileContent *fcontent, BYTE *key) {
 
 	/* --- setup --- */
-	WORD key_schedule[60];
-	int plaintext_size = n_blocks * AES_BLOCK_SIZE;
+	WORD key_schedule[60];   // taken from implementer's tests
+
+	int n_blocks = fcontent->n_ciphertext_bytes / AES_BLOCK_SIZE;
+	int size = n_blocks * AES_BLOCK_SIZE;
+	unsigned char *ciphertext = fcontent->ciphertext;
 
 	BYTE buf_in[AES_BLOCK_SIZE], buf_out[AES_BLOCK_SIZE];
-	BYTE *plaintext = (BYTE *) malloc(sizeof(BYTE) * plaintext_size);
+
+	BYTE *plaintext = (BYTE *) malloc(sizeof(BYTE) * size);
+	if (!plaintext) {
+		printf("Could not decrypt AES ciphertext because plaintext message could not be allocated.\n");
+		return -1;
+	}
 
 	// key setup step performs generates keys that are used in encryption rounds
 	aes_key_setup(key, key_schedule, KEY_SIZE);
 
-	/** --- do the thing --- **/
+	/** --- do the decryption --- **/
 	for (int i = 0; i < n_blocks; i++) {
 
 		// copy next block into buf_in; this will be encrypted
@@ -172,20 +207,22 @@ BYTE* ecb_aes_decrypt(BYTE *ciphertext, BYTE *key) {
 		memcpy(&plaintext[i * AES_BLOCK_SIZE], buf_out, AES_BLOCK_SIZE);
 	}
 
+	if (fcontent->plaintext) {
+		free(fcontent->plaintext);
+	}
+	fcontent->plaintext = plaintext;
+	fcontent->n_plaintext_bytes = strlen(plaintext);
+	printf("DECRYPT: Ciphertext Size: %lu, Plaintext Size: %lu\n", fcontent->n_ciphertext_bytes, strlen(plaintext));
 
-	for (int i = 0; i < plaintext_size; i++) {
+	printf("The last digit value is %x, %d\n", plaintext[size -1], plaintext[size -1]);
+
+	for (int i = 0; i < size - 16; i++) {
 		printf("%x |", plaintext[i] & 0xff);  // trick to print out unsigned hex
 	}
 	printf("\n");
-	printf("DECRYPTED PLAINTEXT: %s\n", plaintext);
+	printf("DECRYPTED PLAINTEXT:\n\"%s\" \nEND OF PLAINTEXT\n", plaintext);
 
-	return plaintext;
-}
-
-
-/**
- *
- */
-int aes_decrypt_file(char *filename) {
 	return 0;
 }
+
+

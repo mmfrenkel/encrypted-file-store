@@ -16,6 +16,8 @@
 
 int main(int argc, char *argv[]) {
 
+	int error;
+
 	printf("Starting here.\n");
 	Request *request = parse_request(argc, argv);
 	if (!request) {
@@ -28,19 +30,36 @@ int main(int argc, char *argv[]) {
 	printf("Found %d files...\n", request->n_files);
 
 	if (request->n_files > 0) {
+
 		for (int i = 0; i < request->n_files; i++) {
+
 				printf("File: %s\n", request->files[i]);
 
-				FileContent *fc = get_file(request->files[i]);
-
-				create_padded_plaintext(fc->contents, fc->size);
+				FileContent *fc = get_plaintext_file(request->files[i]);
 
 				BYTE *key = convert_password_to_cryptographic_key(request->password);
 
-				BYTE *ciphertext = ecb_aes_encrypt(fc->contents, fc->size, key);
+				if ((error = ecb_aes_encrypt(fc, key))) {
+					printf("There was an error performing encryption.\n");
+				}
 
-				ecb_aes_decrypt(ciphertext, key);
+				if ((error = write_ciphertext_to_file(ARCHIVE_DIR, request->archive, fc))) {
+					printf("Couldn't write encrpyted content to file.\n");
+				}
 
+				// now read encrpyted data from file
+
+				FileContent* efc = get_encrypted_file(ARCHIVE_DIR, request->archive, request->files[i]);
+
+				if ((error = ecb_aes_decrypt(efc, key))) {
+					printf("There was an error performing decryption.\n");
+				}
+
+				if ((error = write_plaintext_to_file(efc))) {
+					printf("Couldn't write plaintext to file.\n");
+				}
+
+				printf("SUCCESS\n");
 		}
 	}
 
