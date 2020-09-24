@@ -23,7 +23,7 @@ BYTE* convert_password_to_cryptographic_key(char *pt_password) {
 	// make this temporary memory allocation, as to not delete original pw
 	int len_pt_pw = strlen(pt_password);
 	temp = (BYTE *) malloc(sizeof(unsigned char) * len_pt_pw);
-	strncpy(temp, (unsigned char*) pt_password, strlen(pt_password));
+	strncpy((char *) temp, pt_password, strlen(pt_password));
 
 	// repeatedly run sha-256 hash function
 	for (int i = 0; i < PW_CRYPT_ITER; i++) {
@@ -137,7 +137,49 @@ BYTE* ecb_aes_encrypt(BYTE *plaintext, int len_pt, BYTE *key) {
 		printf("%x |", ciphertext[i] & 0xff);  // trick to print out unsigned hex
 	}
 	printf("\n");
+	printf("Length of ciphertext: %lu\n", strlen((char *) ciphertext));
 	return ciphertext;
+}
+
+/**
+ * Decrypts AES ciphertext.
+ */
+BYTE* ecb_aes_decrypt(BYTE *ciphertext, BYTE *key) {
+
+	// figure out how many blocks (iterations of AES we need)
+	int n_blocks = strlen((char*) ciphertext) / AES_BLOCK_SIZE;
+
+	/* --- setup --- */
+	WORD key_schedule[60];
+	int plaintext_size = n_blocks * AES_BLOCK_SIZE;
+
+	BYTE buf_in[AES_BLOCK_SIZE], buf_out[AES_BLOCK_SIZE];
+	BYTE *plaintext = (BYTE *) malloc(sizeof(BYTE) * plaintext_size);
+
+	// key setup step performs generates keys that are used in encryption rounds
+	aes_key_setup(key, key_schedule, KEY_SIZE);
+
+	/** --- do the thing --- **/
+	for (int i = 0; i < n_blocks; i++) {
+
+		// copy next block into buf_in; this will be encrypted
+		memcpy(buf_in, &ciphertext[i * AES_BLOCK_SIZE], AES_BLOCK_SIZE);
+
+		// AES step, saving to buf_out
+		aes_decrypt(buf_in, buf_out, key_schedule, KEY_SIZE);
+
+		// move the results of buf_out into the final
+		memcpy(&plaintext[i * AES_BLOCK_SIZE], buf_out, AES_BLOCK_SIZE);
+	}
+
+
+	for (int i = 0; i < plaintext_size; i++) {
+		printf("%x |", plaintext[i] & 0xff);  // trick to print out unsigned hex
+	}
+	printf("\n");
+	printf("DECRYPTED PLAINTEXT: %s\n", plaintext);
+
+	return plaintext;
 }
 
 
@@ -147,4 +189,3 @@ BYTE* ecb_aes_encrypt(BYTE *plaintext, int len_pt, BYTE *key) {
 int aes_decrypt_file(char *filename) {
 	return 0;
 }
-

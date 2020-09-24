@@ -21,6 +21,8 @@ BYTE* create_padded_plaintext(BYTE *pt, int len_pt);
 
 BYTE* ecb_aes_encrypt(BYTE *plaintext, int len_pt, BYTE *key);
 
+BYTE* ecb_aes_decrypt(BYTE *ciphertext, BYTE *key);
+
 int aes_decrypt_file(char *filename);
 
 #endif /* SRC_ENCRYPTION_H_ */
