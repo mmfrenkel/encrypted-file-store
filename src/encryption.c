@@ -80,7 +80,7 @@ BYTE* hash_sha_256(BYTE *text, int len_pt) {
 }
 
 /**
- *
+ * Concept for appraoch to padding from: https://www.di-mgt.com.au/cryptopad.html
  */
 BYTE* create_padded_plaintext(BYTE *pt, int len_pt, int block_size) {
 
@@ -196,5 +196,64 @@ int ecb_aes_decrypt(FileContent *fcontent, BYTE *key) {
 	fcontent->n_plaintext_bytes = n_bytes_plaintext;
 	return 0;
 }
+
+/**
+ *  Compute a MAC - message authentication code
+ *
+ *  code = MAC(k, ciphertext)
+ *
+ *  HMAC(m, k) = H(opad XOR k, (H(ipad XOR k, m));
+ */
+BYTE* hmac_256(BYTE *key, BYTE *ciphertext, size_t len_ciphertext) {
+
+	// magic numbers; values obtained from Krawcyzk et al. found here
+	// http://cseweb.ucsd.edu/~mihir/papers/rfc2104.txt
+	BYTE o_key_pad = 0x5c;
+	BYTE i_key_pad = 0x36;
+
+	BYTE key_1[SHA256_BLOCK_SIZE];
+	BYTE key_2[SHA256_BLOCK_SIZE];
+
+	for (int i = 0; i < SHA256_BLOCK_SIZE; i++) {
+		key_1[i] = key[i] ^ o_key_pad;
+		key_2[i] = key[i] ^ i_key_pad;
+	}
+
+	// len of submission
+	size_t submission_size = len_ciphertext + SHA256_BLOCK_SIZE;
+
+	// hash for key1 + ciphertext = "ciphertextkey1"
+	BYTE cipher_key1[submission_size];
+	memcpy(cipher_key1, ciphertext, len_ciphertext);
+	memcpy(cipher_key1 + len_ciphertext, key_1, SHA256_BLOCK_SIZE);
+
+	BYTE *first_hash;
+	if (!(first_hash = hash_sha_256(cipher_key1, submission_size))) {
+		return NULL;
+	}
+
+	// hash for key2 + hash(ciphertextkey1)
+	BYTE cipher_key2[submission_size];
+	memcpy(cipher_key2, ciphertext, len_ciphertext);
+	memcpy(cipher_key2 + len_ciphertext, first_hash, SHA256_BLOCK_SIZE);
+
+	BYTE *second_hash;
+	if (!(second_hash = hash_sha_256(cipher_key1, submission_size))) {
+		free(first_hash);
+		return NULL;
+	}
+	return second_hash;
+	return 0;
+}
+
+
+
+
+
+
+
+
+
+
 
 

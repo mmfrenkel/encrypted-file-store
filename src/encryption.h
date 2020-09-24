@@ -20,4 +20,6 @@ int ecb_aes_encrypt(FileContent *fcontent, BYTE *key);
 
 int ecb_aes_decrypt(FileContent *fcontent, BYTE *key);
 
+BYTE* hmac_256(BYTE *key, BYTE *ciphertext, size_t len_ciphertext);
+
 #endif /* SRC_ENCRYPTION_H_ */

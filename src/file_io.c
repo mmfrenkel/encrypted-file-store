@@ -208,7 +208,7 @@ int write_ciphertext_to_file(char *base_path, char *archive,
  *
  */
 int write_plaintext_to_file(FileContent *fcontent) {
-	return write_content_to_file("meg_test_file.txt", fcontent->plaintext,
+	return write_content_to_file(fcontent->filename, fcontent->plaintext,
 			fcontent->n_plaintext_bytes, "w");
 }
 
