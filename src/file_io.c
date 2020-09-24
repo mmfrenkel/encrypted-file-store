@@ -43,16 +43,21 @@ FileContent* extract_file_content(char *filename, char *file_path,
 /**
  * Find if an archive exists in the archive directory.
  */
-bool archive_exists(char *rel_arc_base_path, char *archive_name) {
+bool archive_exists(char *archive_base_path, char *archive_name) {
 
 	struct dirent *de;
 	bool found = false;
-	char *absolute_arc_dir = get_absolute_path_archive(rel_arc_base_path);
+	char *archive_dir;
 
-	DIR *dir = opendir(absolute_arc_dir);
+	if (!(archive_dir = get_absolute_path_archive(archive_base_path))) {
+		printf("Could not construct archive path.\n");
+		exit(1);
+	}
+
+	DIR *dir = opendir(archive_dir);
 	if (!dir) {
 		printf("Could not find the base archive location %s; run 'make base_archive' "
-				"to create it before continuing\n", absolute_arc_dir);
+				"to create it before continuing\n", archive_dir);
 		exit(1);
 	}
 
@@ -66,8 +71,39 @@ bool archive_exists(char *rel_arc_base_path, char *archive_name) {
 
 	// clean-up
 	closedir(dir);
-	free(absolute_arc_dir);
+	free(archive_dir);
 	return found;
+}
+
+/**
+ *
+ */
+int list_archive_files(char *archive_base_path, char *archive_name) {
+
+	struct dirent *de;
+	char *archive_dir;
+
+	if (!(archive_dir = get_absolute_path_archive(archive_base_path))) {
+		printf("Could construct path of archive.\n");
+		return -1;
+	}
+
+	DIR *dir = opendir(archive_dir);
+	if (!dir) {
+		printf("Could not find the base archive location %s; run 'make base_archive' "
+				"to create it before continuing\n", archive_dir);
+		free(archive_dir);
+		return -1;
+	}
+
+	while ((de = readdir(dir)) != NULL) {
+		printf("* %s\n", de->d_name);
+	}
+
+	// clean-up
+	closedir(dir);
+	free(archive_dir);
+	return 0;
 }
 
 char* create_archive_folder(char *arch_base_path, char *archive_name) {
@@ -91,24 +127,14 @@ char* create_archive_folder(char *arch_base_path, char *archive_name) {
  */
 FileContent* get_plaintext_file(char *filename) {
 
-	// extract contents of file
-	char *name = (char*) malloc(sizeof(char) * (strlen(filename) + 1));
-	if (!name) {
-		printf("Failed to allocate memory for name\n");
-		return NULL;
-	}
-	strncpy(name, filename, strlen(filename));
-
+	printf("INSIDE PLAINTEXT FILE: %s\n", filename);
 	FileContent *file_content;
 
 	// here we assume that the plaintext file is given as a full path, or is in the current dir
-	if (!(file_content = extract_file_content(name, name, false))) {
+	if (!(file_content = extract_file_content(filename, filename, false))) {
 		printf("Could not open plaintext file content.\n");
-		free(name);
 		return NULL;
 	}
-
-	printf("File content complete.\n");
 	return file_content;
 }
 
@@ -169,6 +195,16 @@ int write_plaintext_to_file(FileContent *fcontent) {
 			fcontent->n_plaintext_bytes, "w");
 }
 
+/* Permanently deletes entire file */
+int delete_file(char *file_path) {
+	int del = remove(file_path);
+	if (del) {
+		printf("File did not delete properly. Please check on %s", file_path);
+		return -1;
+	}
+	return 0;
+}
+
 /**
  *
  */
@@ -205,11 +241,13 @@ FileContent* init_file_content(char *filename, BYTE *content,
  */
 FileContent* extract_file_content(char *filename, char *file_path, bool is_encrypted) {
 
+	printf("File: %s...\n", file_path);
 	FILE *fp = fopen(file_path, "rb");          // open file in binary mode
 
 	if (!fp) {
 		printf("Could not find/open file %s. Please make sure to specify an "
-				"absolute path or make sure the file is in the current directory.", file_path);
+				"absolute path or make sure the file is in the current "
+				"directory.\n", file_path);
 		return NULL;
 	}
 
@@ -272,15 +310,18 @@ char* get_home_dir() {
  */
 char* get_absolute_path_archive(char *rel_arc_base_path) {
 
-	char *base_dir;
-	char *absolute_dir;
+	char *base_dir = NULL;
+	char *absolute_dir = NULL;
 
 	// Used this approach because opendir() in archive_exists()
 	// function seemingly couldn't find directory relative to ~.
-	if (!(base_dir = get_home_dir()) ||
-			!(absolute_dir = concat_path(base_dir, rel_arc_base_path))) {
+	if (!(base_dir = get_home_dir()))
+		return NULL;
+
+	if (!(absolute_dir = concat_path(base_dir, rel_arc_base_path))) {
 		printf("Unable to access path to base archive.\n");
-		exit(1);
+		free(base_dir);
+		return NULL;
 	}
 
 	free(base_dir);

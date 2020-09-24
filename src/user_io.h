@@ -21,6 +21,12 @@
 #define COMMAND_IDX 1
 #define PW_BUFFER 100
 
+// valid commands
+#define LIST "list"
+#define ADD "add"
+#define EXTRACT "extract"
+#define DELETE "delete"
+
 typedef struct request {
 	char *subcommand;
 	char *password;

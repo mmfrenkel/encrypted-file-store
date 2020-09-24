@@ -20,7 +20,9 @@ typedef struct file_content {
 	unsigned long n_ciphertext_bytes;
 } FileContent;
 
-bool archive_exists(char *rel_arc_base_path, char *archive_name);
+bool archive_exists(char *archive_base_path, char *archive_name);
+
+int list_archive_files(char *archive_base_path, char *archive_name);
 
 char* create_archive_folder(char *arch_base_path, char *archive_name);
 
@@ -31,5 +33,7 @@ FileContent* get_encrypted_file(char *base_path, char *archive_name, char *filen
 int write_plaintext_to_file(FileContent *fcontent);
 
 int write_ciphertext_to_file(char *base_path, char *archive, FileContent *fcontent);
+
+int delete_file(char *file_path);
 
 #endif /* SRC_FILE_IO_H_ */

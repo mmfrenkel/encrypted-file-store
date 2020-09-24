@@ -12,9 +12,9 @@
 
 #include "user_io.h"
 
-char *VALID_COMMANDS[] = { "list", "add", "extract", "delete" };
-char *COMMANDS_WO_PW[] = { "list" };
-char *COMMANDS_W_FILES[] = {"add", "extract", "delete" };
+char *VALID_COMMANDS[] = { LIST, ADD, EXTRACT, DELETE};
+char *COMMANDS_WO_PW[] = { LIST };
+char *COMMANDS_W_FILES[] = { ADD, EXTRACT, DELETE };
 
 /**
  *
@@ -32,7 +32,7 @@ Request* init_request() {
 	request->subcommand = NULL;
 	request->n_files = 0;
 
-	char *files[MAX_N_FILES] = { NULL };
+	char **files = NULL;
 	request->files = files;
 	return request;
 }
@@ -142,8 +142,8 @@ char* extract_subcommand(int argc, char *argv[]) {
 			int len_str = strlen(argv[COMMAND_IDX]);
 
 			// we found a value subcommand
-			char *subcommand = (char *) malloc(sizeof(char) * len_str);
-			strncpy(subcommand, argv[COMMAND_IDX], len_str);
+			char *subcommand = (char *) malloc(sizeof(char) * len_str + 1);
+			memcpy(subcommand, argv[COMMAND_IDX], len_str + 1);
 			return subcommand;
 		}
 	}
@@ -167,19 +167,23 @@ bool user_submitted_pw(int argc, char *argv[]) {
  */
 char* get_password(int argc, char *argv[]) {
 
-	if (user_submitted_pw(argc, argv)) {
-		// user attempted to pass password via command line
-		return argv[PW_FLAG_INDX + 1];
-	}
+	// use user-submitted pw length; otherwise, buffer length
+	bool use_user_pw = user_submitted_pw(argc, argv);
+	int len_pw = use_user_pw ? strlen(argv[PW_FLAG_INDX + 1]) : PW_BUFFER;
 
 	// otherwise, we have to explicitly ask the user for a password
-	char *password = (char*) malloc(sizeof(char) * PW_BUFFER);
+	char *password = (char*) malloc(sizeof(char) * (len_pw + 1));
 	if (password == NULL) {
 		printf("Failed to allocate memory for user-submitted password\n");
 		return NULL;
 	}
 
-	password = getpass("Please provide your password: ");
+	if (use_user_pw) {
+		memcpy(password, argv[PW_FLAG_INDX + 1], len_pw);
+		memcpy(password + len_pw, "\0", 1);
+	} else {
+		password = getpass("Please provide your password: ");
+	}
 	return password;
 }
 
@@ -196,7 +200,16 @@ char* extract_archive_name(int argc, char *argv[]) {
 		// user didn't provide enough information
 		return NULL;
 	}
-	return argv[archive_name_idx];
+
+	int len_archive_name = strlen(argv[archive_name_idx]);
+	char *archive = (char *) malloc(sizeof(char) * (len_archive_name + 1));
+	if (!archive) {
+		printf("Failed to allocate memroy for archive");
+		return NULL;
+	}
+	memcpy(archive, argv[archive_name_idx], len_archive_name);
+	memcpy(archive + len_archive_name, "\0", 1);
+	return archive;
 }
 
 /**
@@ -207,24 +220,46 @@ char** extract_filenames(int argc, char *argv[]) {
 	// for filename is at a different location than w/o password
 	int filename_idx = user_submitted_pw(argc, argv) ? FILE_INDX + 2 : FILE_INDX;
 
-	 // user didn't provide filenames
 	if (argc < filename_idx + 1) {
-		return NULL;
+		return NULL;   // user didn't provide filenames
 	}
 
 	// user passed more files that is currently supported; they will be warned
 	if (argc - filename_idx > MAX_N_FILES) {
-		printf("WARNING: Only %d files are accepted in each round; you submitted %d files.",
-				MAX_N_FILES, argc - filename_idx);
+		printf("WARNING: Only %d files are accepted in each round; "
+				"you submitted %d files.", MAX_N_FILES, argc - filename_idx);
 	}
 
-	char **filenames = (char**) malloc(sizeof(char*) * MAX_N_FILES);
+	// how many files were submitted?
+	int num_files = MAX_N_FILES > argc - filename_idx ? argc - filename_idx : MAX_N_FILES;
+	char **filenames = (char**) malloc(sizeof(char*) * num_files);
+	if (!filenames) {
+		printf("Could not parse and store submitted filenames because of "
+				"memory allocation failure.\n");
+		return NULL;
+	}
+
+	// put each file into the file names array
 	int curr_idx = 0;
-	for (int i = filename_idx; i < argc; i++) {
-		if (curr_idx < MAX_N_FILES) {
-			filenames[curr_idx] = argv[i];
-			curr_idx++;
+	while (filename_idx < argc && curr_idx < num_files) {
+
+		int len_filename = strlen(argv[filename_idx]);
+		printf("Length of filename: %d\n", len_filename);
+
+		char *filename = (char *) malloc(sizeof(char) * (len_filename + 1));
+		if (!filename) {
+			printf("Failed to allocate memory for filename.\n");
+			for (int j = 0; j < curr_idx; j ++) free(filenames[j]);
+			free(filenames);
+			return NULL;
 		}
+
+		memcpy(filename, argv[filename_idx], len_filename);
+		memcpy(filename + len_filename, "\0", 1);
+		filenames[curr_idx] = filename;
+
+		curr_idx++;
+		filename_idx++;
 	}
 	return filenames;
 }
@@ -235,9 +270,8 @@ char** extract_filenames(int argc, char *argv[]) {
 int count_files(char *filenames[]) {
 
 	int i = 0;
-	while (i < MAX_N_FILES && filenames[i]) {
-		i++;
-	}
+	while (i < MAX_N_FILES && filenames[i]) i++;
+
 	return i;
 }
 

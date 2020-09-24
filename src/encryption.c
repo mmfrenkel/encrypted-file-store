@@ -33,15 +33,20 @@ BYTE* convert_password_to_cryptographic_key(char *pt_password) {
 	// make this temporary memory allocation, as to not delete original pw
 	int len_pt_pw = strlen(pt_password);
 	temp = (BYTE *) malloc(sizeof(unsigned char) * (len_pt_pw + 1));
+	if (!temp) {
+		printf("Failed to allocate memory for temporary hash storage.\n ");
+		return NULL;
+	}
 	strncpy((char *) temp, pt_password, len_pt_pw);
 
 	// repeatedly run sha-256 hash function
 	for (int i = 0; i < PW_CRYPT_ITER; i++) {
 		if (!(new_hash = hash_sha_256(temp, len_pt_pw))) {
 			printf("Unable to create cryptographic key from submitted password\n");
-			exit(1);
+			free(temp);
+			return NULL;
 		}
-		free(temp);  // free memory allocated to older version of hash
+		free(temp);      // free memory allocated to older version of hash
 		temp = new_hash;
 	}
 
@@ -96,16 +101,6 @@ BYTE* create_padded_plaintext(BYTE *pt, int len_pt, int block_size) {
 		memcpy(&padded_pt[shift], &pad_size, 1);
 	}
 
-	printf("\n\nPlaintext: ");
-	for (int i = 0; i < len_pt; i++) {
-		printf("%x", pt[i] & 0xff);  // trick to print out unsigned hex
-	}
-	printf("\n\nPadded Plaintext: ");
-	for (int i = 0; i < len_pt + pad_size; i++) {
-		printf("%x |", padded_pt[i] & 0xff);  // trick to print out unsigned hex
-	}
-	printf("\n\n");
-
 	return padded_pt;
 }
 
@@ -157,16 +152,11 @@ int ecb_aes_encrypt(FileContent *fcontent, BYTE *key) {
 		memcpy(&ciphertext[i * AES_BLOCK_SIZE], buf_out, AES_BLOCK_SIZE);
 	}
 
-	if (fcontent->ciphertext) {
+	if (fcontent->ciphertext)
 		free(fcontent->ciphertext);
-	}
 	fcontent->ciphertext = ciphertext;
 	fcontent->n_ciphertext_bytes = ciphertext_size;
 
-	printf("Ciphertext: ");
-	for (int i = 0; i < ciphertext_size; i++) {
-		printf("%x |", ciphertext[i] & 0xff); // trick to print out unsigned hex
-	}
 	return 0;
 }
 
@@ -183,8 +173,7 @@ int ecb_aes_decrypt(FileContent *fcontent, BYTE *key) {
 	int size = n_blocks * AES_BLOCK_SIZE;
 	unsigned char *ciphertext = fcontent->ciphertext;
 
-	BYTE buf_in[AES_BLOCK_SIZE], buf_out[AES_BLOCK_SIZE];
-	BYTE pt_buffer[size];
+	BYTE buf_in[AES_BLOCK_SIZE], buf_out[AES_BLOCK_SIZE], pt_buffer[size];
 
 	// key setup step performs generates keys that are used in encryption rounds
 	aes_key_setup(key, key_schedule, KEY_SIZE);
@@ -201,30 +190,25 @@ int ecb_aes_decrypt(FileContent *fcontent, BYTE *key) {
 		// move the results of buf_out into the final
 		memcpy(&pt_buffer[i * AES_BLOCK_SIZE], buf_out, AES_BLOCK_SIZE);
 	}
-
 	// the padding is held in the last BYTE of the decrypted buffer; this allows us to determine
 	// how many ACTUAL bytes of plaintext we started with
 	int n_bytes_plaintext = size - pt_buffer[size - 1];
 
-	BYTE* plaintext = (BYTE *) malloc(sizeof(BYTE) * (n_bytes_plaintext + 1));
+	BYTE *plaintext = (BYTE*) malloc(sizeof(BYTE) * (n_bytes_plaintext + 1));
 	if (!plaintext) {
-		printf("Could not decrypt AES ciphertext because plaintext message could not be allocated.\n");
+		printf("Could not decrypt AES ciphertext because plaintext could not be allocated.\n");
 		return -1;
 	}
+
+	// copy over the buffered plaintext into the final plaintext arr
 	memcpy(plaintext, pt_buffer, n_bytes_plaintext);
 	memcpy(plaintext + n_bytes_plaintext, "\0", 1);
 
-	if (fcontent->plaintext) {
+	if (fcontent->plaintext)
 		free(fcontent->plaintext);
-	}
 	fcontent->plaintext = plaintext;
 	fcontent->n_plaintext_bytes = n_bytes_plaintext;
 
-	for (int i = 0; i < size - 16; i++) {
-		printf("%x |", plaintext[i] & 0xff);  // trick to print out unsigned hex
-	}
-	printf("\n");
-	printf("DECRYPTED PLAINTEXT:\n\"%s\"\nEND OF PLAINTEXT\n", plaintext);
 	return 0;
 }
 
