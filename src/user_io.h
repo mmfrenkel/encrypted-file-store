@@ -35,27 +35,10 @@ typedef struct request {
 	int n_files;
 } Request;
 
-Request* init_request();
 
 void free_request(Request *request);
 
 Request* parse_request(int argc, char *argv[]);
-
-bool password_required(char *subcommand);
-
-bool filename_required(char *subcommand);
-
-char* extract_subcommand(int argc, char *argv[]);
-
-bool user_submitted_pw(int argc, char *argv[]);
-
-char* get_password(int argc, char *argv[]);
-
-char* extract_archive_name(int argc, char *argv[]);
-
-char** extract_filenames(int argc, char *argv[]);
-
-int count_files(char *filenames[]);
 
 void print_subcommand_options();
 

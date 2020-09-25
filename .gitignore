@@ -1,4 +1,5 @@
 .cproject
+*.txt
 .project
 .settings
 bin/

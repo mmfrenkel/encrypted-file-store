@@ -24,8 +24,10 @@ char* get_absolute_path_archive(char *rel_arc_base_path);
 
 char* concat_path(char *str1, char *str2);
 
-FileContent* init_file_content(char *filename, BYTE *content,
-		unsigned long n_bytes, bool content_encrypted);
+FileContent* init_file_content_pt(char *filename, BYTE *content, size_t n_bytes);
+
+FileContent* init_file_content_ct(char *filename, BYTE *content, size_t n_bytes,
+		size_t len_iv, size_t len_hmac_hash);
 
 char* get_full_filepath_in_archive(char *base_path, char *archive,
 		char *filename);
@@ -33,10 +35,27 @@ char* get_full_filepath_in_archive(char *base_path, char *archive,
 int write_content_to_file(char *file_path, BYTE *content, size_t n_bytes,
 		char *write_mode);
 
-FileContent* extract_file_content(char *filename, char *file_path,
-bool is_encrypted);
+int extract_file_content(char *file_path, BYTE **content);
 
 /* ------------------------------------------------------ */
+
+
+void free_file_content(FileContent *fc) {
+
+	if(!fc) return;
+
+	if (fc->filename) free(fc->filename);
+
+	if (fc->plaintext) free(fc->plaintext);
+
+	if (fc->ciphertext) free(fc->ciphertext);
+
+	if (fc->iv) free(fc->iv);
+
+	if (fc->hmac_hash) free(fc->hmac_hash);
+
+	free(fc);
+}
 
 /**
  * Find if an archive exists in the archive directory.
@@ -140,14 +159,23 @@ char* create_archive_folder(char *arch_base_path, char *archive_name) {
 /**
  *
  */
-FileContent* get_plaintext_file(char *filename) {
+FileContent* open_plaintext_file(char *filename) {
 
-	printf("INSIDE PLAINTEXT FILE: %s\n", filename);
+	printf("Opening plaintext file...\n");
+
 	FileContent *file_content;
+	BYTE *content = NULL;
+
+	int n_bytes  = extract_file_content(filename, &content);
 
 	// here we assume that the plaintext file is given as a full path, or is in the current dir
-	if (!(file_content = extract_file_content(filename, filename, false))) {
+	if (n_bytes < 0) {
 		printf("Could not open plaintext file content.\n");
+		return NULL;
+	}
+
+	if (!(file_content = init_file_content_pt(filename, content, n_bytes))) {
+		printf("Could not create FileContent struct to contain data.\n");
 		return NULL;
 	}
 	return file_content;
@@ -156,24 +184,29 @@ FileContent* get_plaintext_file(char *filename) {
 /**
  *
  */
-FileContent* get_encrypted_file(char *base_path, char *archive, char *filename) {
+FileContent* open_encrypted_file(char *base_path, char *archive, char *filename,
+		size_t len_iv, size_t len_hmac_hash) {
 
 	// get full path of where file should be
 	char *file_path;
-
 	if (!(file_path = get_full_filepath_in_archive(base_path, archive, filename))) {
 		printf("Issue encountered creating the full file path.\n");
 		return NULL;
 	}
 	printf("Full file path for encrypted file: %s\n", file_path);
 
-	FileContent *file_content;
-	if (!(file_content = extract_file_content(filename, file_path, true))) {
+	BYTE *content = NULL;
+	int n_bytes = extract_file_content(file_path, &content);
+	if (n_bytes < 0) {
+		printf("Could not extract file content from encrypted file.\n");
 		return NULL;
 	}
 
-	// clean it all up
+	FileContent *file_content = init_file_content_ct(filename, content, n_bytes,
+			len_iv, len_hmac_hash);
+
 	free(file_path);
+	free(content); // we no longer need this unparsed content; it's now in file_content
 	return file_content;
 }
 
@@ -181,20 +214,31 @@ FileContent* get_encrypted_file(char *base_path, char *archive, char *filename) 
  *
  */
 int write_ciphertext_to_file(char *base_path, char *archive,
-		FileContent *fcontent) {
+		FileContent *fcontent, size_t len_iv, size_t len_hmac_hash) {
 
-	int error;
+	// we need to concatinate the IV + ciphertext + HMAC, in this order first
+	size_t total_bytes = fcontent->n_ciphertext_bytes + len_iv + len_hmac_hash;
+	BYTE content[total_bytes];
+
+	memcpy(content, fcontent->iv, len_iv);
+
+	memcpy(&content[len_iv], fcontent->ciphertext,
+			fcontent->n_ciphertext_bytes);
+
+	memcpy(&content[len_iv + fcontent->n_ciphertext_bytes], fcontent->hmac_hash,
+			len_hmac_hash);
+
+	// get the full file path for where the file should be saved
 	char *file_path;
-
 	if (!(file_path = get_full_filepath_in_archive(base_path, archive,
 			fcontent->filename))) {
 		printf("Issue encountered creating the full file path.\n");
 		return -1;
 	}
 
-	if ((error = write_content_to_file(file_path, fcontent->ciphertext,
-			fcontent->n_ciphertext_bytes, "wb"))) {
-
+	// write the concatinated content to file at full file path
+	int error;
+	if ((error = write_content_to_file(file_path, content, total_bytes, "wb"))) {
 		printf("Could not write ciphertext to file.\n");
 		free(file_path);
 		return -1;
@@ -225,8 +269,7 @@ int delete_file(char *file_path) {
 /**
  *
  */
-FileContent* init_file_content(char *filename, BYTE *content,
-		unsigned long n_bytes, bool content_encrypted) {
+FileContent* init_file_content_pt(char *filename, BYTE *content, size_t n_bytes) {
 
 	FileContent *file = (FileContent*) malloc(sizeof(FileContent));
 	if (!file) {
@@ -234,39 +277,110 @@ FileContent* init_file_content(char *filename, BYTE *content,
 		return NULL;
 	}
 
-	if (content_encrypted) {
-		file->filename = filename;
-		file->ciphertext = content;
-		file->n_ciphertext_bytes = n_bytes;
-		file->plaintext = NULL;
-		file->n_plaintext_bytes = 0;
-
-	} else {
-		file->filename = filename;
-		file->plaintext = content;
-		file->n_plaintext_bytes = n_bytes;
-		file->ciphertext = NULL;
-		file->n_ciphertext_bytes = 0;
+	// FileContent struct should get it's own memory copy of the filename
+	char *filename_cpy = (char *) malloc(strlen(filename) * (sizeof(char) + 1));
+	if (!filename_cpy) {
+		printf("Failed to allocate memory for filename copy in file content.\n");
+		free(file);
+		return NULL;
 	}
+	memcpy(filename_cpy, filename, strlen(filename) + 1);
+
+	// we know information at this point about the plaintext
+	file->filename = filename_cpy;
+	file->plaintext = content;
+	file->n_plaintext_bytes = n_bytes;
+
+	// no info about the encryption of this file yet; will be filled out as needed later
+	file->ciphertext = NULL;
+	file->n_ciphertext_bytes = 0;
+	file->iv = NULL;
+	file->hmac_hash = NULL;
+
+	return file;
+}
+
+
+/**
+ *
+ */
+FileContent* init_file_content_ct(char *filename, BYTE *content, size_t n_bytes,
+		size_t len_iv, size_t len_hmac_hash) {
+
+	FileContent *file = (FileContent*) malloc(sizeof(FileContent));
+	if (!file) {
+		printf("Failed to allocate memory for new file.\n");
+		return NULL;
+	}
+
+	// all we know is encryption information, but it contains several items that we have
+	// to parse out.
+	BYTE* iv = (BYTE *) malloc(sizeof(BYTE) * len_iv);
+	if (!iv) {
+		printf("Could not allocate memory for IV from encrypted file.\n");
+		return NULL;
+	}
+
+	size_t ct_bytes = n_bytes - len_iv - len_hmac_hash;
+	BYTE *ct = (BYTE *) malloc(sizeof(BYTE) * ct_bytes);
+	if (!ct) {
+		printf("Could not allocate memory for ciphertext.\n");
+		free(iv);
+		return NULL;
+	}
+
+	BYTE *hmac_hash = (BYTE *) malloc(sizeof(BYTE) * len_hmac_hash);
+	if (!hmac_hash) {
+		printf("Could not allocate memory for HMAC hash from encrypted file.\n");
+		free(iv);
+		free(ct);
+		return NULL;
+	}
+
+	memcpy(iv, content, len_iv);
+	memcpy(ct, &content[len_iv], ct_bytes);
+	memcpy(hmac_hash,  &content[len_iv + ct_bytes], len_hmac_hash);
+
+	// FileContent struct should get it's own memory copy of the filename
+	char *filename_cpy = (char *) malloc(strlen(filename) * (sizeof(char) + 1));
+	if (!filename_cpy) {
+		printf("Failed to allocate memory for filename copy in file content.\n");
+		free(file);
+		return NULL;
+	}
+	memcpy(filename_cpy, filename, strlen(filename) + 1);
+
+	file->filename = filename_cpy;
+	file->ciphertext = ct;
+	file->n_ciphertext_bytes = ct_bytes;
+	file->iv = iv;
+	file->hmac_hash = hmac_hash;
+
+	// we don't know anything about the plaintext yet
+	file->plaintext = NULL;
+	file->n_plaintext_bytes = 0;
+
 	return file;
 }
 
 /**
+ * Extracts all content from a file at the provided file path and saves
+ * it into memory pointed to by content. The method allocates the required
+ * amount of memory to hold the entire file content.
  *
  * https://stackoverflow.com/questions/22059189/read-a-file-as-byte-array
  * https://www.tutorialspoint.com/c_standard_library/c_function_ftell.htm
  */
-FileContent* extract_file_content(char *filename, char *file_path,
-		bool is_encrypted) {
+int extract_file_content(char *file_path, BYTE **content) {
 
-	printf("File: %s...\n", file_path);
+	printf("Extracting content from file: %s...\n", file_path);
 	FILE *fp = fopen(file_path, "rb");          // open file in binary mode
 
 	if (!fp) {
 		printf("Could not find/open file %s. Please make sure to specify an "
 				"absolute path or make sure the file is in the current "
 				"directory.\n", file_path);
-		return NULL;
+		return -1;
 	}
 
 	fseek(fp, 0, SEEK_END);                    // jump to the end of the file
@@ -277,13 +391,14 @@ FileContent* extract_file_content(char *filename, char *file_path,
 	BYTE *file_buf = (BYTE*) malloc(n_bytes * sizeof(BYTE));
 	if (!file_buf) {
 		printf("Could not allocate memory for file buffer to read content.\n");
+		return -1;
 	}
 
 	fread(file_buf, sizeof(BYTE), n_bytes, fp);
 	fclose(fp);
 
-	// now put into a FileContent
-	return init_file_content(filename, file_buf, n_bytes, is_encrypted);
+	*content = file_buf;
+	return n_bytes;
 }
 
 /**

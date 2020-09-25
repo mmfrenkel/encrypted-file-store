@@ -9,6 +9,7 @@
 #define SRC_ENCRYPTION_H_
 
 #include "sha256.h"
+#include "aes.h"
 #include "file_io.h"
 
 #define PW_CRYPT_ITER 10000
@@ -16,10 +17,12 @@
 
 BYTE* convert_password_to_cryptographic_key(char *pt_password);
 
-int ecb_aes_encrypt(FileContent *fcontent, BYTE *key);
+int cbc_aes_encrypt(FileContent *fcontent, BYTE *key);
 
-int ecb_aes_decrypt(FileContent *fcontent, BYTE *key);
+int cbc_aes_decrypt(FileContent *fcontent, BYTE *key);
 
-BYTE* hmac_256(BYTE *key, BYTE *ciphertext, size_t len_ciphertext);
+int assign_hmac_256(FileContent *fcontent, BYTE *key);
+
+int assign_iv(FileContent *fcontent);
 
 #endif /* SRC_ENCRYPTION_H_ */

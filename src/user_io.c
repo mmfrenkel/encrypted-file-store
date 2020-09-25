@@ -16,6 +16,26 @@ char *VALID_COMMANDS[] = { LIST, ADD, EXTRACT, DELETE };
 char *COMMANDS_WO_PW[] = { LIST };
 char *COMMANDS_W_FILES[] = { ADD, EXTRACT, DELETE };
 
+
+Request* init_request();
+
+int count_files_submitted(int argc, char *argv[]);
+
+bool password_required(char *subcommand);
+
+bool filename_required(char *subcommand);
+
+bool user_submitted_pw(int argc, char *argv[]);
+
+char* get_password(int argc, char *argv[]);
+
+char* extract_archive_name(int argc, char *argv[]);
+
+char* extract_subcommand(int argc, char *argv[]);
+
+char** extract_filenames(int argc, char *argv[], int num_files);
+
+
 /**
  *
  */
@@ -42,16 +62,12 @@ Request* init_request() {
  */
 void free_request(Request *request) {
 
-	if (request->archive) {
-		free(request->archive);
-	}
+	if (request->archive) free(request->archive);
 
-	if (request->password) {
-		free(request->password);
-	}
+	if (request->password)  free(request->password);
 
 	if (request->files) {
-		for (int i = 0; i < MAX_N_FILES; i++) {
+		for (int i = 0; i < request->n_files; i++) {
 			free(request->files[i]);
 		}
 		free(request->files);
@@ -95,14 +111,20 @@ Request* parse_request(int argc, char *argv[]) {
 
 	// get filenames
 	if (filename_required(subcommand)) {
-		if (!(request->files = extract_filenames(argc, argv))) {
+
+		request->n_files = count_files_submitted(argc, argv);
+
+		if (request->n_files < 0) {
 			printf("Expected at least one filename for subcommand: "
 					"%s. Or perhaps you forgot to include the archive name?\n", subcommand);
-
 			free_request(request);
 			return NULL;
 		}
-		request->n_files = count_files(request->files);
+
+		if (!(request->files = extract_filenames(argc, argv, request->n_files))) {
+			free_request(request);
+			return NULL;
+		}
 	}
 	return request;
 }
@@ -213,17 +235,15 @@ char* extract_archive_name(int argc, char *argv[]) {
 	return archive;
 }
 
-/**
- *
- */
-char** extract_filenames(int argc, char *argv[]) {
+
+int count_files_submitted(int argc, char *argv[]) {
 	// if the user submitted a password, then we can expect that the field
 	// for filename is at a different location than w/o password
 	int filename_idx =
 			user_submitted_pw(argc, argv) ? FILE_INDX + 2 : FILE_INDX;
 
 	if (argc < filename_idx + 1) {
-		return NULL;   // user didn't provide filenames
+		return 0;   // user didn't provide filenames
 	}
 
 	// user passed more files that is currently supported; they will be warned
@@ -232,10 +252,22 @@ char** extract_filenames(int argc, char *argv[]) {
 				"you submitted %d files.", MAX_N_FILES, argc - filename_idx);
 	}
 
-	// how many files were submitted?
-	int num_files =
-			MAX_N_FILES > argc - filename_idx ?
-					argc - filename_idx : MAX_N_FILES;
+	// how many files were submitted; this can only accept up to the maximum number?
+	int num_files = MAX_N_FILES > argc - filename_idx ?
+			argc - filename_idx : MAX_N_FILES;
+
+	return num_files;
+}
+
+/**
+ *
+ */
+char** extract_filenames(int argc, char *argv[], int num_files) {
+	// if the user submitted a password, then we can expect that the field
+	// for filename is at a different location than w/o password
+	int filename_idx =
+			user_submitted_pw(argc, argv) ? FILE_INDX + 2 : FILE_INDX;
+
 	char **filenames = (char**) malloc(sizeof(char*) * num_files);
 	if (!filenames) {
 		printf("Could not parse and store submitted filenames because of "
@@ -245,10 +277,10 @@ char** extract_filenames(int argc, char *argv[]) {
 
 	// put each file into the file names array
 	int curr_idx = 0;
+
 	while (filename_idx < argc && curr_idx < num_files) {
 
 		int len_filename = strlen(argv[filename_idx]);
-		printf("Length of filename: %d\n", len_filename);
 
 		char *filename = (char*) malloc(sizeof(char) * (len_filename + 1));
 		if (!filename) {
@@ -260,7 +292,7 @@ char** extract_filenames(int argc, char *argv[]) {
 		}
 
 		memcpy(filename, argv[filename_idx], len_filename);
-		memcpy(filename + len_filename, "\0", 1);
+		memcpy(&filename[len_filename], "\0", 1);
 		filenames[curr_idx] = filename;
 
 		curr_idx++;

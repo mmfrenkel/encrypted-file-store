@@ -18,7 +18,11 @@ typedef struct file_content {
 	unsigned long n_plaintext_bytes;
 	BYTE *ciphertext;
 	unsigned long n_ciphertext_bytes;
+	BYTE *iv;
+	BYTE *hmac_hash;
 } FileContent;
+
+void free_file_content(FileContent *fc);
 
 bool archive_exists(char *archive_base_path, char *archive_name);
 
@@ -26,15 +30,15 @@ int list_archive_files(char *archive_base_path, char *archive_name);
 
 char* create_archive_folder(char *arch_base_path, char *archive_name);
 
-FileContent* get_plaintext_file(char *filename);
+FileContent* open_plaintext_file(char *filename);
 
-FileContent* get_encrypted_file(char *base_path, char *archive_name,
-		char *filename);
+FileContent* open_encrypted_file(char *base_path, char *archive, char *filename,
+		size_t len_iv, size_t len_hmac_hash);
 
 int write_plaintext_to_file(FileContent *fcontent);
 
 int write_ciphertext_to_file(char *base_path, char *archive,
-		FileContent *fcontent);
+		FileContent *fcontent, size_t len_iv, size_t len_hmac_hash);
 
 int delete_file(char *file_path);
 

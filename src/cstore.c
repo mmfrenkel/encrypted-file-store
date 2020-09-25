@@ -40,6 +40,7 @@ int main(int argc, char *argv[]) {
 		error = cstore_delete(request);
 	}
 
+	free_request(request);
 	return error;
 }
 
@@ -71,9 +72,9 @@ int cstore_add(Request *request) {
 	}
 
 	// if archive does't exist, create it
-	if (!archive_exists(ARCHIVE_DIR, request->archive)) {
-		create_archive_folder(ARCHIVE_DIR, request->archive);
-	}
+	//if (!archive_exists(ARCHIVE_DIR, request->archive)) {
+	//	create_archive_folder(ARCHIVE_DIR, request->archive);
+	// }
 
 	if (!(key = convert_password_to_cryptographic_key(request->password))) {
 		printf("Couldn't convert password to cryptographic key");
@@ -83,29 +84,48 @@ int cstore_add(Request *request) {
 	// add list of files to archive
 	for (int i = 0; i < request->n_files; i++) {
 
-		FileContent *fc = get_plaintext_file(request->files[i]);
+		FileContent *fc = open_plaintext_file(request->files[i]);
 
 		if (!fc) {
+			printf("Couldn't obtain file content for %s\n", request->files[i]);
 			return -1;
 		}
 
-		if ((error = ecb_aes_encrypt(fc, key))) {
-			printf("There was an error performing encryption.\n");
+		if ((error = assign_iv(fc))) {
+			free_file_content(fc);
+			printf("There was an issue assigning iv for %s\n", fc->filename);
 			return -1;
 		}
 
-		if ((error = write_ciphertext_to_file(ARCHIVE_DIR, request->archive, fc))) {
-			printf("Couldn't write encrpyted content to file.\n");
+		if ((error = cbc_aes_encrypt(fc, key))) {
+			printf("There was an error performing AES CBC encryption for %s\n", fc->filename);
+			free_file_content(fc);
 			return -1;
 		}
 
-		// delete the original file
-		if (delete_file(request->files[i])) {
-			printf(
-					"Encryption step succeeded, but could not remove original, unencrypted file.\n");
+		if ((error = assign_hmac_256(fc, key))) {
+			printf("There was an error determing HMAC %s\n", fc->filename);
+			free_file_content(fc);
+			return -1;
 		}
+
+		if ((error = write_ciphertext_to_file(ARCHIVE_DIR, request->archive, fc,
+				AES_BLOCK_SIZE, SHA256_BLOCK_SIZE))) {
+			printf("Couldn't write encrpyted content to file for %s\n", fc->filename);
+			free_file_content(fc);
+			return -1;
+		}
+//
+//		// delete the original file
+//		if (delete_file(request->files[i])) {
+//			printf("Encryption step succeeded, but could not remove original, "
+//					"unencrypted file for %s\n", fc->filename);
+//		}
+
 		printf("Succesfully encrypted %s within archive %s\n", fc->filename,
 				request->archive);
+
+		free_file_content(fc);
 	}
 	return 0;
 }
@@ -136,21 +156,32 @@ int cstore_extract(Request *request) {
 	// add list of files to archive
 	for (int i = 0; i < request->n_files; i++) {
 
-		FileContent *fc = get_encrypted_file(ARCHIVE_DIR, request->archive,
-				request->files[i]);
+		FileContent *fc = open_encrypted_file(ARCHIVE_DIR, request->archive,
+				request->files[i], AES_BLOCK_SIZE, SHA256_BLOCK_SIZE);
 
-		if ((error = ecb_aes_decrypt(fc, key))) {
-			printf("There was an error performing decryption.\n");
+		if (!fc) {
+			printf("Couldn't obtain encrypted file content for %s\n", fc->filename);
+			return -1;
+		}
+
+		if ((error = cbc_aes_decrypt(fc, key))) {
+			printf("There was an error performing decryption for %s\n", fc->filename);
+			free_file_content(fc);
+			return -1;
 		}
 
 		if ((error = write_plaintext_to_file(fc))) {
-			printf("Couldn't write plaintext to file.\n");
+			printf("There was an error writing plaintext file for %s\n", fc->filename);
+			free_file_content(fc);
+			return -1;
 		}
 
-		printf(
-				"Succesfully decrypted %s from archive %s and saved to unencrpyted "
-						"file.\n", fc->filename, request->archive);
+		printf("Succesfully decrypted %s from archive %s and saved to unencrpyted "
+			   "file.\n", fc->filename, request->archive);
+
+		free_file_content(fc);
 	}
+
 	return 0;
 
 }
