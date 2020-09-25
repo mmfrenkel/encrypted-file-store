@@ -161,8 +161,6 @@ char* create_archive_folder(char *arch_base_path, char *archive_name) {
  */
 FileContent* open_plaintext_file(char *filename) {
 
-	printf("Opening plaintext file...\n");
-
 	FileContent *file_content;
 	BYTE *content = NULL;
 
@@ -313,8 +311,7 @@ FileContent* init_file_content_ct(char *filename, BYTE *content, size_t n_bytes,
 		return NULL;
 	}
 
-	// all we know is encryption information, but it contains several items that we have
-	// to parse out.
+	// we need to parse information out of the encrypted content (i.e., IV, ciphertext, HMAC)
 	BYTE* iv = (BYTE *) malloc(sizeof(BYTE) * len_iv);
 	if (!iv) {
 		printf("Could not allocate memory for IV from encrypted file.\n");
@@ -350,13 +347,14 @@ FileContent* init_file_content_ct(char *filename, BYTE *content, size_t n_bytes,
 	}
 	memcpy(filename_cpy, filename, strlen(filename) + 1);
 
+	// we know things about the ciphertext...
 	file->filename = filename_cpy;
 	file->ciphertext = ct;
 	file->n_ciphertext_bytes = ct_bytes;
 	file->iv = iv;
 	file->hmac_hash = hmac_hash;
 
-	// we don't know anything about the plaintext yet
+	// ... we don't know anything about the plaintext yet
 	file->plaintext = NULL;
 	file->n_plaintext_bytes = 0;
 
@@ -373,7 +371,6 @@ FileContent* init_file_content_ct(char *filename, BYTE *content, size_t n_bytes,
  */
 int extract_file_content(char *file_path, BYTE **content) {
 
-	printf("Extracting content from file: %s...\n", file_path);
 	FILE *fp = fopen(file_path, "rb");          // open file in binary mode
 
 	if (!fp) {

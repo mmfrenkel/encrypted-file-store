@@ -25,4 +25,6 @@ int assign_hmac_256(FileContent *fcontent, BYTE *key);
 
 int assign_iv(FileContent *fcontent);
 
+int integrity_is_compromised(FileContent *fcontent, BYTE *key);
+
 #endif /* SRC_ENCRYPTION_H_ */

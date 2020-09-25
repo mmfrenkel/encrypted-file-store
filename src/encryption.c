@@ -56,11 +56,6 @@ BYTE* convert_password_to_cryptographic_key(char *pt_password) {
 		temp = new_hash;
 	}
 
-	for (size_t i = 0; i < SHA256_BLOCK_SIZE; i++) {
-		printf("%x", temp[i] & 0xff);  // trick to print out unsigned hex
-	}
-	printf("\n");
-
 	return temp;
 }
 
@@ -242,6 +237,26 @@ int assign_hmac_256(FileContent *fcontent, BYTE *key) {
 	return 0;
 }
 
+/**
+ *
+ */
+int integrity_is_compromised(FileContent *fcontent, BYTE *key) {
+
+	if (!fcontent->hmac_hash) {
+		printf("Cannot run integrity check without previous HMAC hash, "
+				"so cannot say if integrity is compromised.\n");
+		return 0;
+	}
+
+	BYTE *recomputed_hmac = compute_hmac_256(key, fcontent->ciphertext,
+			fcontent->n_ciphertext_bytes);
+
+	if (memcmp(recomputed_hmac, fcontent->hmac_hash, SHA256_BLOCK_SIZE)) {
+		return 1;
+	}
+	return 0;
+}
+
 
 /**
  *  Compute a MAC - message authentication code
@@ -268,24 +283,25 @@ BYTE* compute_hmac_256(BYTE *key, BYTE *ct, size_t len_ct) {
 	xor(key, i_key_buf, key_i, SHA256_BLOCK_SIZE);
 
 	// ------- RUN SHA-256 TWICE OVER  -------------
+	size_t len_ct_key_i = len_ct + SHA256_BLOCK_SIZE;
+	BYTE ct_key_i[len_ct_key_i];
 
-	size_t full_len = len_ct + SHA256_BLOCK_SIZE;
-	BYTE ciphertext_key_i[full_len];
-
-	memcpy(ciphertext_key_i, ct, len_ct);
-	memcpy(ciphertext_key_i + len_ct, key_i, SHA256_BLOCK_SIZE);
+	memcpy(ct_key_i, ct, len_ct);
+	memcpy(ct_key_i + len_ct, key_i, SHA256_BLOCK_SIZE);
 
 	BYTE *first_hash;  	// hash for ciphertext + key_i = "ciphertext_key_i"
-	if (!(first_hash = hash_sha_256(ciphertext_key_i, full_len))) {
+	if (!(first_hash = hash_sha_256(ct_key_i, len_ct_key_i))) {
 		return NULL;
 	}
 
-	BYTE ciphertext_key_o[full_len];
-	memcpy(ciphertext_key_o, first_hash, len_ct);
-	memcpy(ciphertext_key_o + len_ct, key_o, SHA256_BLOCK_SIZE);
+	size_t len_ct_key_o = 2 * SHA256_BLOCK_SIZE;
+	BYTE ct_key_o[len_ct_key_o];
+
+	memcpy(ct_key_o, first_hash, SHA256_BLOCK_SIZE);
+	memcpy(&ct_key_o[SHA256_BLOCK_SIZE], key_o, SHA256_BLOCK_SIZE);
 
 	BYTE *second_hash;  // hash for k_o + hash(ciphertext_key_i)
-	if (!(second_hash = hash_sha_256(ciphertext_key_o, full_len))) {
+	if (!(second_hash = hash_sha_256(ct_key_o, len_ct_key_o))) {
 		free(first_hash);
 		return NULL;
 	}

@@ -24,9 +24,6 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
-	printf("User selected subcommand: %s for archive: %s\n",
-			request->subcommand, request->archive);
-
 	if (strncmp(LIST, request->subcommand, strlen(LIST)) == 0) {
 		error = cstore_list(request);
 
@@ -98,7 +95,8 @@ int cstore_add(Request *request) {
 		}
 
 		if ((error = cbc_aes_encrypt(fc, key))) {
-			printf("There was an error performing AES CBC encryption for %s\n", fc->filename);
+			printf("There was an error performing AES CBC encryption "
+					"for %s\n", fc->filename);
 			free_file_content(fc);
 			return -1;
 		}
@@ -111,7 +109,8 @@ int cstore_add(Request *request) {
 
 		if ((error = write_ciphertext_to_file(ARCHIVE_DIR, request->archive, fc,
 				AES_BLOCK_SIZE, SHA256_BLOCK_SIZE))) {
-			printf("Couldn't write encrpyted content to file for %s\n", fc->filename);
+			printf("Couldn't write encrpyted content to file "
+					"for %s\n", fc->filename);
 			free_file_content(fc);
 			return -1;
 		}
@@ -121,7 +120,7 @@ int cstore_add(Request *request) {
 //			printf("Encryption step succeeded, but could not remove original, "
 //					"unencrypted file for %s\n", fc->filename);
 //		}
-
+//
 		printf("Succesfully encrypted %s within archive %s\n", fc->filename,
 				request->archive);
 
@@ -135,6 +134,7 @@ int cstore_add(Request *request) {
  */
 int cstore_extract(Request *request) {
 	int error;
+	int is_compromised;
 	BYTE *key;
 
 	if (request->n_files == 0) {
@@ -160,24 +160,33 @@ int cstore_extract(Request *request) {
 				request->files[i], AES_BLOCK_SIZE, SHA256_BLOCK_SIZE);
 
 		if (!fc) {
-			printf("Couldn't obtain encrypted file content for %s\n", fc->filename);
+			printf("Couldn't obtain encrypted file content "
+					"for %s\n", fc->filename);
 			return -1;
 		}
 
 		if ((error = cbc_aes_decrypt(fc, key))) {
-			printf("There was an error performing decryption for %s\n", fc->filename);
+			printf("There was an error performing decryption "
+					"for %s\n", fc->filename);
 			free_file_content(fc);
 			return -1;
+		}
+
+		if ((is_compromised = integrity_is_compromised(fc, key))) {
+			printf("\n**** The integrity of %s has been compromised! ****\n\n",
+					fc->filename);
 		}
 
 		if ((error = write_plaintext_to_file(fc))) {
-			printf("There was an error writing plaintext file for %s\n", fc->filename);
+			printf("There was an error writing plaintext file "
+					"for %s\n", fc->filename);
 			free_file_content(fc);
 			return -1;
 		}
 
-		printf("Succesfully decrypted %s from archive %s and saved to unencrpyted "
-			   "file.\n", fc->filename, request->archive);
+		printf("Decrypted %s from archive \"%s\"", fc->filename, request->archive);
+		if (is_compromised) printf(", but remember, it's compromised... :(\n");
+		else printf(".\n");
 
 		free_file_content(fc);
 	}
