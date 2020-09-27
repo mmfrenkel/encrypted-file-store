@@ -4,10 +4,12 @@
  *  Created on: Sep 22, 2020
  *      Author: meganfrenkel
  */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <pwd.h>
 #include <unistd.h>
 
 #include "user_io.h"
