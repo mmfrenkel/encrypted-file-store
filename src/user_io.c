@@ -226,7 +226,7 @@ char* get_password(int argc, char *argv[]) {
  * necessary.
  *
  * Code to obtain hidden password was obtained from Stack Overflow on September 27, 2020
- * from Henrique Nascimento Gouveia. His contribution can be found here:
+ * from Henrique Nascimento Gouveia and Lucas. Their contributions can be found here:
  * https://stackoverflow.com/questions/1786532/c-command-line-password-input.
  */
 void get_hidden_pw(char *password) {
@@ -248,13 +248,15 @@ void get_hidden_pw(char *password) {
 	tcsetattr(STDIN_FILENO, TCSANOW, &new_terminal);
 
 	// get the password from the user
-	if (fgets(password, PW_BUFFER_SIZE, stdin) == NULL) {
-		password[0] = '\0';
-	} else {
-		// replace \n with end of string char
-		password[strlen(password) - 1] = '\0';
-	}
-	printf("\n");
+	int c;
+	int i = 0;
+    while ((c = getchar()) != '\n' && c != EOF && i < PW_BUFFER_SIZE){
+        password[i++] = c;
+    }
+    password[i] = '\0';
+
+    printf("\n");
+    printf("This is the password: %s, length: %lu\n", password, strlen(password));
 
 	// go back to the old settings
 	tcsetattr(STDIN_FILENO, TCSANOW, &old_terminal);
