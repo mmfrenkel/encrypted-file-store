@@ -121,7 +121,7 @@ int cstore_add(Request *request) {
 					"unencrypted file for %s\n", fc->filename);
 		}
 
-		printf(" * Succesfully encrypted \"%s\" within archive \"%s\".\n", fc->filename,
+		printf(" * Succesfully encrypted \"%s\" within archive \"%s.\"\n", fc->filename,
 				request->archive);
 		free_file_content(fc);
 	}
@@ -247,7 +247,7 @@ int cstore_delete(Request *request) {
 			continue;
 		}
 
-		printf(" * Deleted \"%s\" from archive \"%s\".\n", fc->filename, request->archive);
+		printf(" * Deleted \"%s\" from archive \"%s.\"\n", fc->filename, request->archive);
 		free_file_content(fc);
 
 	}

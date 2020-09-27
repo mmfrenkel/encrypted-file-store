@@ -19,7 +19,7 @@
 #define N_COMMANDS_WO_PW 1
 #define N_COMMANDS_W_FILES 3
 #define COMMAND_IDX 1
-#define PW_BUFFER 100
+#define PW_BUFFER_SIZE 20
 
 // valid commands
 #define LIST "list"

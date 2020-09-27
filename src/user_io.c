@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include <pwd.h>
+#include <termios.h>
 #include <unistd.h>
 
 #include "user_io.h"
@@ -36,6 +36,8 @@ char* extract_archive_name(int argc, char *argv[]);
 char* extract_subcommand(int argc, char *argv[]);
 
 char** extract_filenames(int argc, char *argv[], int num_files);
+
+void get_hidden_pw(char *password);
 
 
 /**
@@ -193,7 +195,7 @@ char* get_password(int argc, char *argv[]) {
 
 	// use user-submitted pw length; otherwise, buffer length
 	bool use_user_pw = user_submitted_pw(argc, argv);
-	int len_pw = use_user_pw ? strlen(argv[PW_FLAG_INDX + 1]) : PW_BUFFER;
+	int len_pw = use_user_pw ? strlen(argv[PW_FLAG_INDX + 1]) : PW_BUFFER_SIZE;
 
 	// otherwise, we have to explicitly ask the user for a password
 	char *password = (char*) malloc(sizeof(char) * (len_pw + 1));
@@ -206,9 +208,56 @@ char* get_password(int argc, char *argv[]) {
 		memcpy(password, argv[PW_FLAG_INDX + 1], len_pw);
 		memcpy(password + len_pw, "\0", 1);
 	} else {
-		password = getpass("Please provide your password: ");
+		// get the password from the user
+		// password = getpass("Please provide your password: ");
+		get_hidden_pw(password);
 	}
 	return password;
+}
+
+/**
+ * This method is used to securely obtain a password from a user (the text they
+ * submit for their password is obscured).
+ *
+ * Originally, getpass() was attempted to achieve this purpose. This function worked
+ * well  while developing on MAC, but failed to work on the Linux VM (Seems that
+ * the header file with getpass() could not be identified, even though
+ * `man getpass` suggested that a header file did exist), so a new approach was
+ * necessary.
+ *
+ * Code to obtain hidden password was obtained from Stack Overflow on September 27, 2020
+ * from Henrique Nascimento Gouveia. His contribution can be found here:
+ * https://stackoverflow.com/questions/1786532/c-command-line-password-input.
+ */
+void get_hidden_pw(char *password) {
+
+	static struct termios old_terminal;
+	static struct termios new_terminal;
+
+	printf("Please provide your password (at most %d characters): ",
+			PW_BUFFER_SIZE);
+
+	// get settings of the actual terminal
+	tcgetattr(STDIN_FILENO, &old_terminal);
+
+	// do not echo the characters
+	new_terminal = old_terminal;
+	new_terminal.c_lflag &= ~(ECHO);
+
+	// set this as the new terminal options
+	tcsetattr(STDIN_FILENO, TCSANOW, &new_terminal);
+
+	// get the password from the user
+	if (fgets(password, PW_BUFFER_SIZE, stdin) == NULL) {
+		password[0] = '\0';
+	} else {
+		// replace \n with end of string char
+		password[strlen(password) - 1] = '\0';
+	}
+	printf("\n");
+
+	// go back to the old settings
+	tcsetattr(STDIN_FILENO, TCSANOW, &old_terminal);
 }
 
 /**
