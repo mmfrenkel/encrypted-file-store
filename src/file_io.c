@@ -26,9 +26,6 @@ char* concat_path(char *str1, char *str2);
 
 FileContent* init_file_content_pt(char *filename, BYTE *content, size_t n_bytes);
 
-FileContent* init_file_content_ct(char *filename, BYTE *content, size_t n_bytes,
-		size_t len_iv, size_t len_hmac_hash);
-
 char* get_full_filepath_in_archive(char *base_path, char *archive,
 		char *filename);
 

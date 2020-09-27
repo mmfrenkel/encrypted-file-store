@@ -42,4 +42,7 @@ int write_ciphertext_to_file(char *base_path, char *archive,
 
 int delete_file(char *file_path);
 
+FileContent* init_file_content_ct(char *filename, BYTE *content, size_t n_bytes,
+		size_t len_iv, size_t len_hmac_hash);
+
 #endif /* SRC_FILE_IO_H_ */

@@ -23,8 +23,10 @@ int cbc_aes_decrypt(FileContent *fcontent, BYTE *key);
 
 int assign_hmac_256(FileContent *fcontent, BYTE *key);
 
+BYTE* compute_hmac_256(BYTE *key, BYTE *ct, size_t len_ct);
+
 int assign_iv(FileContent *fcontent);
 
-int integrity_is_compromised(FileContent *fcontent, BYTE *key);
+int integrity_check(FileContent *fcontent, BYTE *key);
 
 #endif /* SRC_ENCRYPTION_H_ */

@@ -20,8 +20,6 @@ BYTE* hash_sha_256(BYTE *text, int len_pt);
 
 BYTE* create_padded_plaintext(BYTE *pt, int len_pt, int block_size);
 
-BYTE* compute_hmac_256(BYTE *key, BYTE *ct, size_t len_ct);
-
 void xor(BYTE *in1, BYTE *in2, BYTE *out, size_t length);
 
 BYTE* get_random(size_t n_bytes);
@@ -228,6 +226,13 @@ int assign_hmac_256(FileContent *fcontent, BYTE *key) {
 	BYTE *hmac_hash = compute_hmac_256(key, fcontent->ciphertext,
 			fcontent->n_ciphertext_bytes);
 
+	printf("HMAC HASH: \n");
+	for (size_t i = 0; i < SHA256_BLOCK_SIZE; i++) {
+		printf("%x|", hmac_hash[i] & 0xff);  // trick to print out unsigned hex
+	}
+	printf("\n");
+
+
 	if (!hmac_hash) {
 		printf("Could not compute hmac for file.\n");
 		return -1;
@@ -240,7 +245,7 @@ int assign_hmac_256(FileContent *fcontent, BYTE *key) {
 /**
  *
  */
-int integrity_is_compromised(FileContent *fcontent, BYTE *key) {
+int integrity_check(FileContent *fcontent, BYTE *key) {
 
 	if (!fcontent->hmac_hash) {
 		printf("Cannot run integrity check without previous HMAC hash, "
@@ -251,10 +256,13 @@ int integrity_is_compromised(FileContent *fcontent, BYTE *key) {
 	BYTE *recomputed_hmac = compute_hmac_256(key, fcontent->ciphertext,
 			fcontent->n_ciphertext_bytes);
 
-	if (memcmp(recomputed_hmac, fcontent->hmac_hash, SHA256_BLOCK_SIZE)) {
-		return 1;
-	}
-	return 0;
+	// comparison of original hmac hash and recomputed hash should determine
+	// that (1) either the password (key) is not correct OR that (2) the content of the
+	// ciphertext file has been changed.
+	int is_corrupted = memcmp(recomputed_hmac, fcontent->hmac_hash, SHA256_BLOCK_SIZE);
+
+	free(recomputed_hmac);
+	return is_corrupted;
 }
 
 

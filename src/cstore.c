@@ -68,10 +68,10 @@ int cstore_add(Request *request) {
 		return 0;
 	}
 
-	// if archive does't exist, create it
-	//if (!archive_exists(ARCHIVE_DIR, request->archive)) {
-	//	create_archive_folder(ARCHIVE_DIR, request->archive);
-	// }
+	if (!archive_exists(ARCHIVE_DIR, request->archive)) {
+		printf("Archive %s does not yet exist, so creating it...\n", request->archive);
+		create_archive_folder(ARCHIVE_DIR, request->archive);
+	 }
 
 	if (!(key = convert_password_to_cryptographic_key(request->password))) {
 		printf("Couldn't convert password to cryptographic key");
@@ -172,7 +172,7 @@ int cstore_extract(Request *request) {
 			return -1;
 		}
 
-		if ((is_compromised = integrity_is_compromised(fc, key))) {
+		if ((is_compromised = integrity_check(fc, key))) {
 			printf("\n**** The integrity of %s has been compromised! ****\n\n",
 					fc->filename);
 		}
