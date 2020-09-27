@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
  */
 int cstore_list(Request *request) {
 
-	// if archive does't exist, create it
+	// if archive does't exist, don't do anything, just continue
 	if (!archive_exists(ARCHIVE_DIR, request->archive)) {
 		alert_no_archive(request->archive);
 		return 0;
@@ -71,7 +71,7 @@ int cstore_add(Request *request) {
 	if (!archive_exists(ARCHIVE_DIR, request->archive)) {
 		printf("Archive %s does not yet exist, so creating it...\n", request->archive);
 		create_archive_folder(ARCHIVE_DIR, request->archive);
-	 }
+	}
 
 	if (!(key = convert_password_to_cryptographic_key(request->password))) {
 		printf("Couldn't convert password to cryptographic key");
@@ -84,27 +84,27 @@ int cstore_add(Request *request) {
 		FileContent *fc = open_plaintext_file(request->files[i]);
 
 		if (!fc) {
-			printf("Couldn't obtain file content for %s\n", request->files[i]);
-			return -1;
+			free_file_content(fc);
+			continue;
 		}
 
 		if ((error = assign_iv(fc))) {
 			free_file_content(fc);
-			printf("There was an issue assigning iv for %s\n", fc->filename);
-			return -1;
+			free_file_content(fc);
+			continue;
 		}
 
 		if ((error = cbc_aes_encrypt(fc, key))) {
 			printf("There was an error performing AES CBC encryption "
 					"for %s\n", fc->filename);
 			free_file_content(fc);
-			return -1;
+			continue;
 		}
 
 		if ((error = assign_hmac_256(fc, key))) {
 			printf("There was an error determing HMAC %s\n", fc->filename);
 			free_file_content(fc);
-			return -1;
+			continue;
 		}
 
 		if ((error = write_ciphertext_to_file(ARCHIVE_DIR, request->archive, fc,
@@ -112,18 +112,17 @@ int cstore_add(Request *request) {
 			printf("Couldn't write encrpyted content to file "
 					"for %s\n", fc->filename);
 			free_file_content(fc);
-			return -1;
+			continue;
 		}
-//
-//		// delete the original file
-//		if (delete_file(request->files[i])) {
-//			printf("Encryption step succeeded, but could not remove original, "
-//					"unencrypted file for %s\n", fc->filename);
-//		}
-//
-		printf("Succesfully encrypted %s within archive %s\n", fc->filename,
-				request->archive);
 
+		// delete the original file
+		if (delete_file(request->files[i])) {
+			printf("Encryption step succeeded, but could not remove original, "
+					"unencrypted file for %s\n", fc->filename);
+		}
+
+		printf(" * Succesfully encrypted \"%s\" within archive \"%s\".\n", fc->filename,
+				request->archive);
 		free_file_content(fc);
 	}
 	return 0;
@@ -142,7 +141,7 @@ int cstore_extract(Request *request) {
 		return 0;
 	}
 
-	// if archive does't exist, create it
+	// if archive does't exist, don't do anything
 	if (!archive_exists(ARCHIVE_DIR, request->archive)) {
 		alert_no_archive(request->archive);
 		return 0;
@@ -160,20 +159,19 @@ int cstore_extract(Request *request) {
 				request->files[i], AES_BLOCK_SIZE, SHA256_BLOCK_SIZE);
 
 		if (!fc) {
-			printf("Couldn't obtain encrypted file content "
-					"for %s\n", fc->filename);
-			return -1;
+			free_file_content(fc);
+			continue;
 		}
 
 		if ((error = cbc_aes_decrypt(fc, key))) {
-			printf("There was an error performing decryption "
-					"for %s\n", fc->filename);
 			free_file_content(fc);
-			return -1;
+			continue;
 		}
 
 		if ((is_compromised = integrity_check(fc, key))) {
-			printf("\n**** The integrity of %s has been compromised! ****\n\n",
+			printf(" INTEGRITY ALERT: Are you the owner of this archive? "
+					"Are you certain you submitted the correct password? "
+					"If so, the integrity of %s may have been compromised!\n",
 					fc->filename);
 		}
 
@@ -181,11 +179,11 @@ int cstore_extract(Request *request) {
 			printf("There was an error writing plaintext file "
 					"for %s\n", fc->filename);
 			free_file_content(fc);
-			return -1;
+			continue;
 		}
 
-		printf("Decrypted %s from archive \"%s\"", fc->filename, request->archive);
-		if (is_compromised) printf(", but remember, it's compromised... :(\n");
+		printf(" * Decrypted \"%s\" from archive \"%s\"", fc->filename, request->archive);
+		if (is_compromised) printf(", but remember, it has been compromised... :(\n");
 		else printf(".\n");
 
 		free_file_content(fc);
@@ -200,13 +198,15 @@ int cstore_extract(Request *request) {
  */
 int cstore_delete(Request *request) {
 	BYTE *key;
+	int error;
+	int is_compromised;
 
 	if (request->n_files == 0) {
 		printf("No files were specified for deletion from archive.\n");
 		return 0;
 	}
 
-	// if archive does't exist, create it
+	// if archive doesn't exist, don't do anything
 	if (!archive_exists(ARCHIVE_DIR, request->archive)) {
 		alert_no_archive(request->archive);
 		return 0;
@@ -217,6 +217,40 @@ int cstore_delete(Request *request) {
 		return -1;
 	}
 
+	for (int i = 0; i < request->n_files; i++) {
+
+		FileContent *fc = open_encrypted_file(ARCHIVE_DIR, request->archive,
+				request->files[i], AES_BLOCK_SIZE, SHA256_BLOCK_SIZE);
+
+		if (!fc) {
+			free_file_content(fc);
+			continue;
+		}
+
+		if ((error = cbc_aes_decrypt(fc, key))) {
+			printf("Cannot verify that you can delete this file (%s).\n", fc->filename);
+			free_file_content(fc);
+			continue;
+		}
+
+		if ((is_compromised = integrity_check(fc, key))) {
+			printf("INTEGRITY ALERT: Cannot delete %s. Either you are not the owner or this file "
+					"is corrupted, so your identity cannot be confirmed.", fc->filename);
+			free_file_content(fc);
+			continue;
+		}
+
+		if ((error = delete_file_from_archive(ARCHIVE_DIR, request->archive,
+				request->files[i]))) {
+			printf("Cannot delete %s. There was an error on deletion.", fc->filename);
+			free_file_content(fc);
+			continue;
+		}
+
+		printf(" * Deleted \"%s\" from archive \"%s\".\n", fc->filename, request->archive);
+		free_file_content(fc);
+
+	}
 	return 0;
 }
 

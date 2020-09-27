@@ -2,8 +2,8 @@
 *.txt
 .project
 .settings
-bin/
 obj/
 Debug/
 .DS_Store
+bin/cstore
 

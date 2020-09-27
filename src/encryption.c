@@ -200,7 +200,12 @@ int cbc_aes_decrypt(FileContent *fcontent, BYTE *key) {
 	// ----------------- REMOVE BUFFER --------------------
 
 	int n_bytes_pt = ct_size - pt_buffer[ct_size - 1]; 						// padding is held in last byte of decrypted buffer
-
+	if (n_bytes_pt <= 0) {													// if wrong password/corrupted, this can be <0, which cannot be processed
+		printf("Unable to decrypt file \"%s\". It is possible this "
+			"file has been corrupted. Are you sure you submitted "
+			"your password correctly?\n", fcontent->filename);
+		return -1;
+	}
 	BYTE *plaintext = (BYTE*) malloc(sizeof(BYTE) * (n_bytes_pt + 1));
 	if (!plaintext) {
 		printf("Could not decrypt AES ciphertext because plaintext "
@@ -225,13 +230,6 @@ int assign_hmac_256(FileContent *fcontent, BYTE *key) {
 
 	BYTE *hmac_hash = compute_hmac_256(key, fcontent->ciphertext,
 			fcontent->n_ciphertext_bytes);
-
-	printf("HMAC HASH: \n");
-	for (size_t i = 0; i < SHA256_BLOCK_SIZE; i++) {
-		printf("%x|", hmac_hash[i] & 0xff);  // trick to print out unsigned hex
-	}
-	printf("\n");
-
 
 	if (!hmac_hash) {
 		printf("Could not compute hmac for file.\n");

@@ -115,13 +115,13 @@ int list_archive_files(char *archive_base_path, char *archive_name) {
 		return -1;
 	}
 
-	printf("Files currently encrypted within %s:\n", archive_name);
+	printf("Files currently encrypted within \"%s\":\n", archive_name);
 	int count_files = 0;
 	while ((de = readdir(dir)) != NULL) {
 
 		// we don't need to see the . and .. content in dir
 		if (strcmp(".", de->d_name) && strcmp("..", de->d_name)) {
-			printf("*  %s\n", de->d_name);
+			printf(" *  %s\n", de->d_name);
 			count_files++;
 		}
 	}
@@ -165,7 +165,10 @@ FileContent* open_plaintext_file(char *filename) {
 
 	// here we assume that the plaintext file is given as a full path, or is in the current dir
 	if (n_bytes < 0) {
-		printf("Could not open plaintext file content.\n");
+		return NULL;
+	}
+	else if (n_bytes == 0) {
+		printf("Encryption is not supported for files (%s) with no contents.\n", filename);
 		return NULL;
 	}
 
@@ -188,21 +191,24 @@ FileContent* open_encrypted_file(char *base_path, char *archive, char *filename,
 		printf("Issue encountered creating the full file path.\n");
 		return NULL;
 	}
-	printf("Full file path for encrypted file: %s\n", file_path);
 
 	BYTE *content = NULL;
 	int n_bytes = extract_file_content(file_path, &content);
 	if (n_bytes < 0) {
-		printf("Could not extract file content from encrypted file.\n");
+		return NULL;
+	}
+	else if (n_bytes == 0) {
+		printf("The encrypted file %s has no contents; this is probably not what you were "
+				"expecting. This file may have been tampered with.\n", filename);
 		return NULL;
 	}
 
-	FileContent *file_content = init_file_content_ct(filename, content, n_bytes,
+	FileContent *fcontent = init_file_content_ct(filename, content, n_bytes,
 			len_iv, len_hmac_hash);
 
 	free(file_path);
 	free(content); // we no longer need this unparsed content; it's now in file_content
-	return file_content;
+	return fcontent;
 }
 
 /**
@@ -259,6 +265,20 @@ int delete_file(char *file_path) {
 		return -1;
 	}
 	return 0;
+}
+
+int delete_file_from_archive(char *base_path, char *archive, char *filename) {
+
+	// get full path of where file should be
+	char *file_path;
+	if (!(file_path = get_full_filepath_in_archive(base_path, archive, filename))) {
+		printf("Issue encountered creating the full file path.\n");
+		return -1;
+	}
+
+	int error = delete_file(file_path);
+	free(file_path);
+	return error;
 }
 
 /**
@@ -371,9 +391,8 @@ int extract_file_content(char *file_path, BYTE **content) {
 	FILE *fp = fopen(file_path, "rb");          // open file in binary mode
 
 	if (!fp) {
-		printf("Could not find/open file %s. Please make sure to specify an "
-				"absolute path or make sure the file is in the current "
-				"directory.\n", file_path);
+		printf("Could not open file at \"%s\". Please make sure you specified "
+				"the filename correctly and retry.\n", file_path);
 		return -1;
 	}
 

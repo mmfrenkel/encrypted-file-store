@@ -42,6 +42,8 @@ int write_ciphertext_to_file(char *base_path, char *archive,
 
 int delete_file(char *file_path);
 
+int delete_file_from_archive(char *base_path, char *archive, char *filename);
+
 FileContent* init_file_content_ct(char *filename, BYTE *content, size_t n_bytes,
 		size_t len_iv, size_t len_hmac_hash);
 

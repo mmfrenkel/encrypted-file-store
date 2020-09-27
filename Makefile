@@ -56,4 +56,4 @@ base_archive:
 	mkdir -p $(ARCHIVE_DIR)
 
 clean:
-	rm -rf $(BIN_DIR) $(OBJ_DIR)
+	rm -rf $(EXE) $(OBJ_DIR)
