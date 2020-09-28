@@ -91,7 +91,11 @@ If you'd like to actually install the project (i.e., not just build the executab
 ```
 $ sudo make install
 ```
-Note that this command assumes that `/usr/local/bin` is on the `PATH` and that files can be moved to it, so it is recommened to only use `make install` if using a Linux OS. However, this nicely allows a user to issue `cstore` instead of `./bin/cstore` to run the program.
+Note that this command assumes that `/usr/local/bin` is on the `PATH` and that files can be moved to it, so it is recommened to only use `make install` if using a Linux OS. However, this nicely allows a user to issue `cstore` instead of `./bin/cstore` to run the program. The downside is that you'll need to continue using `sudo` commands in order to re-build the make file (otherwise you'll get a permissions error). If you install and later decide that it isn't for you:
+
+```
+$ sudo make uninstall
+```
 
 There are two sets of tests for this program: (1) unit tests and (2) a bash script that runs various iterations of possible user commands. While the unit tests ensure that the encryption steps are functioning properly, the bash script tests are mostly to confirm that the program can handle various scenarios of user inputs with grace and without throwing any errors.
 

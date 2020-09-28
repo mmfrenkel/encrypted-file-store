@@ -282,7 +282,7 @@ int cstore_delete(Request *request) {
 
 		if ((is_compromised = integrity_check(fc, key))) {
 			printf("INTEGRITY ALERT: Cannot delete %s. Either you are "
-				   "authorized to delete this file or this file is corrupted."
+				   "authorized to delete this file or this file is corrupted. "
 				   "Either way, your identity cannot be confirmed.",
 					fc->filename);
 			free_file_content(fc);

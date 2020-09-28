@@ -40,6 +40,8 @@ test: clean $(BIN_DIR) $(OBJ_DIR) $(TEST_EXE)
 
 install: clean build base_archive cp_to_path
 
+uninstall: rm_from_path clean
+
 $(EXE): $(SRC_OBJ) $(LIB_OBJ) | $(BIN_DIR)
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
@@ -66,9 +68,13 @@ $(BIN_DIR) $(OBJ_DIR) $(LOG_DIR):
 	
 cp_to_path:
 	cp ./bin/cstore /usr/local/bin/cstore
+	
+rm_from_path:
+	rm /usr/local/bin/cstore
 
 base_archive:
 	mkdir -p $(ARCHIVE_DIR)
 
 clean:
 	rm -rf $(EXE) $(OBJ_DIR)
+	
