@@ -9,7 +9,7 @@ This file store has four main commands: `add`, `extract`, `delete` and `list`, e
 ```
 $ cd ~/encrypted_filestore_archive
 ```
-#### a. Add
+### I. Add
 
 If a user wants to encrypt a new file (e.g., `apple.txt`) into an archive (e.g., `fruits`) they could issue the following command, providing their password within the command using the `-p` flag:
 
@@ -27,7 +27,7 @@ If a user prefers to not pass their password via the `-p` flag in echoed plainte
 $ ./bin/cstore add fruits apple.txt bananas.txt
 $ Please provide your password: 
 ```
-#### b. Extract
+### II. Extract
 
 Once a file is successfully added to an archive, it is easy to extract the file using the same password as it was initially encrypted with:
 
@@ -36,7 +36,7 @@ $ ./bin/cstore extract -p <password> fruits apple.txt bananas.txt
 ```
 This will extract the file from the encrypted file store into the current directory, however it will not delete it from the encrypted file store. Upon extracting the file from the file store, the program will perform an integrity check to alert users if their file may have been corrupted or tampered with. It is important for users to get their password correct, or else the decryption of the file will not be successful (they will end up with a file that looks like jibberish!). 
 
-#### c. Delete
+### III. Delete
 
 In order to  delete the document from the archive:
 
@@ -45,7 +45,7 @@ $ ./bin/cstore delete -p <password> fruits apple.txt bananas.txt
 ```
 Files are only deleted from an archive if users can be authenticated. If the user passes the wrong password, they will be unable to delete their file from the archive. 
 
-#### d. List
+### IV. List
 
 To list all encrypted files currently in the archive:
 
