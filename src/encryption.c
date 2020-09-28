@@ -1,18 +1,25 @@
 /*
  * encryption.c
  *
+ * Responsible for all encryption/decryption/hashing steps
+ * associated with encrypted file store. Implements functionality
+ * to convert a user's password into cryptographic key,
+ * encrypt plaintext to ciphertext via AES encryption
+ * using cipher block chaining (CBC) mode, and HMAC hash
+ * calculations of key+ciphertext using SHA-256.
+ *
  *  Created on: Sep 23, 2020
  *      Author: meganfrenkel
  */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "encryption.h"
-#include "aes.h"
-#include "sha256.h"
+#include "../encryption-algorithms/aes.h"
+#include "../encryption-algorithms/sha256.h"
 #include "file_io.h"
-
 
 /* ----- methods that shouldn't be called externally ---- */
 
@@ -55,7 +62,8 @@ BYTE* convert_password_to_cryptographic_key(char *pt_password, int iterations) {
 	// repeatedly run sha-256 hash function
 	for (int i = 0; i < iterations; i++) {
 		if (!(new_hash = hash_sha_256(temp, len_pt_pw))) {
-			printf("Unable to create cryptographic key from submitted password\n");
+			printf("Unable to create cryptographic key from "
+					"submitted password\n");
 			free(temp);
 			return NULL;
 		}
@@ -78,7 +86,7 @@ BYTE* convert_password_to_cryptographic_key(char *pt_password, int iterations) {
  */
 BYTE* hash_sha_256(BYTE *text, int len_pt) {
 
-	BYTE *buffer = (BYTE *) malloc(sizeof(BYTE) * SHA256_BLOCK_SIZE);
+	BYTE *buffer = (BYTE*) malloc(sizeof(BYTE) * SHA256_BLOCK_SIZE);
 	if (!buffer) {
 		printf("Could not perform SHA256 hash function because buffer could "
 				"not be allocated.\n");
@@ -118,14 +126,16 @@ int cbc_aes_encrypt(FileContent *fcontent, BYTE *key) {
 
 	// make sure that the user has assigned an IV
 	if (!fcontent->iv) {
-		printf("You need to find an initialization vector before you"
+		printf("This method uses cipher block chaining (CBC); you need "
+				"to find an initialization vector for CBC before you "
 				"may use this function.\n");
 		return -1;
 	}
 
 	// ------------------- SETUP -------------------
 
-	BYTE *padded_plaintext = create_padded_plaintext(fcontent->plaintext,	// pad the plaintext be a multiple of the AES block size
+	// pad the plaintext be a multiple of the AES block size
+	BYTE *padded_plaintext = create_padded_plaintext(fcontent->plaintext,
 			fcontent->n_plaintext_bytes, AES_BLOCK_SIZE);
 
 	if (!padded_plaintext) {
@@ -133,31 +143,45 @@ int cbc_aes_encrypt(FileContent *fcontent, BYTE *key) {
 		return -1;
 	}
 
-	int n_blocks = (fcontent->n_plaintext_bytes / AES_BLOCK_SIZE) + 1;		// how many AES blocks/iterations do we need?
+	// how many AES blocks/iterations do we need?
+	int n_blocks = (fcontent->n_plaintext_bytes / AES_BLOCK_SIZE) + 1;
 	int ciphertext_size = n_blocks * AES_BLOCK_SIZE;
-	WORD key_schedule[60];  												// taken from implementer's tests
-	BYTE pt[AES_BLOCK_SIZE], ct[AES_BLOCK_SIZE];							// intermediate buffers
+	WORD key_schedule[60];  // taken from implementer's tests
+	BYTE pt[AES_BLOCK_SIZE], ct[AES_BLOCK_SIZE];
 	BYTE tmp[AES_BLOCK_SIZE], xor_buf[AES_BLOCK_SIZE];
 
-	BYTE *ciphertext = (BYTE*) malloc(sizeof(BYTE) * ciphertext_size); 		// this will hold the final full ciphertext
+	// this will hold the final full ciphertext
+	BYTE *ciphertext = (BYTE*) malloc(sizeof(BYTE) * ciphertext_size);
 	if (!ciphertext) {
 		printf("Could not encrypt file %s\n, due to issue allocating "
 				"memory for ciphertext", fcontent->filename);
 		return -1;
 	}
 
-	aes_key_setup(key, key_schedule, KEY_SIZE);								// generates keys that are used in encryption rounds
-	memcpy(tmp, fcontent->iv, AES_BLOCK_SIZE);                              // initialization vector -> tmp to be ready for first block
+	// generates keys that are used in encryption rounds
+	aes_key_setup(key, key_schedule, KEY_SIZE);
+
+	// initialization vector -> tmp to be ready for first block
+	memcpy(tmp, fcontent->iv, AES_BLOCK_SIZE);
 
 	// ---------------- DO THE ENCRYPTION -----------
 
 	for (int i = 0; i < n_blocks; i++) {
 
-		memcpy(pt, &padded_plaintext[i * AES_BLOCK_SIZE], AES_BLOCK_SIZE); 	// pt is the next block of plaintext to be encrypted
-		xor(tmp, pt, xor_buf, AES_BLOCK_SIZE);          					// XOR pt block with tmp -> xor buf
-		aes_encrypt(xor_buf, ct, key_schedule, KEY_SIZE);                   // AES step, encrypted block goes to ciphertext (ct) block
-		memcpy(&ciphertext[i * AES_BLOCK_SIZE], ct, AES_BLOCK_SIZE);        // move this ct block into final result
-		memcpy(tmp, ct, AES_BLOCK_SIZE);       								// ct block becomes new tmp to XOR with next block of pt
+		// pt is the next block of plaintext to be encrypted
+		memcpy(pt, &padded_plaintext[i * AES_BLOCK_SIZE], AES_BLOCK_SIZE);
+
+		// XOR pt block with tmp -> xor buf
+		xor(tmp, pt, xor_buf, AES_BLOCK_SIZE);
+
+		// AES step, encrypted block goes to ciphertext (ct) block
+		aes_encrypt(xor_buf, ct, key_schedule, KEY_SIZE);
+
+		// move this ct block into final result
+		memcpy(&ciphertext[i * AES_BLOCK_SIZE], ct, AES_BLOCK_SIZE);
+
+		// ct block becomes new tmp to XOR with next block of pt
+		memcpy(tmp, ct, AES_BLOCK_SIZE);
 	}
 
 	// ----------------- SAVE CIPHERTEXT -------------------
@@ -165,6 +189,7 @@ int cbc_aes_encrypt(FileContent *fcontent, BYTE *key) {
 	fcontent->ciphertext = ciphertext;
 	fcontent->n_ciphertext_bytes = ciphertext_size;
 
+	free(padded_plaintext);  // we no longer need this padded pt
 	return 0;
 }
 
@@ -191,14 +216,20 @@ int cbc_aes_decrypt(FileContent *fcontent, BYTE *key) {
 
 	// ------------------- SETUP -------------------
 
-	WORD key_schedule[60];   												// taken from implementer's tests
-	int n_blocks = fcontent->n_ciphertext_bytes / AES_BLOCK_SIZE;           // how many AES blocks do we need?
+	// taken from implementer's tests
+	WORD key_schedule[60];
+
+	// how many AES blocks do we need?
+	int n_blocks = fcontent->n_ciphertext_bytes / AES_BLOCK_SIZE;
 	int ct_size = n_blocks * AES_BLOCK_SIZE;
-	BYTE pt[AES_BLOCK_SIZE], ct[AES_BLOCK_SIZE];							// intermediate buffers
+	BYTE pt[AES_BLOCK_SIZE], ct[AES_BLOCK_SIZE];
 	BYTE tmp[AES_BLOCK_SIZE], xor_buf[AES_BLOCK_SIZE], pt_buffer[ct_size];
 
-	aes_key_setup(key, key_schedule, KEY_SIZE);								// generates keys used in decryption rounds
-	memcpy(tmp, fcontent->iv, AES_BLOCK_SIZE);                              // initialization vector -> tmp to be ready for first block
+	// generates keys used in decryption rounds
+	aes_key_setup(key, key_schedule, KEY_SIZE);
+
+	// initialization vector -> tmp to be ready for first block
+	memcpy(tmp, fcontent->iv, AES_BLOCK_SIZE);
 
 	// ---------------- DO THE DECRYPTION ------------
 
@@ -206,17 +237,29 @@ int cbc_aes_decrypt(FileContent *fcontent, BYTE *key) {
 
 	for (int i = 0; i < n_blocks; i++) {
 
-		memcpy(ct, &ciphertext[i * AES_BLOCK_SIZE], AES_BLOCK_SIZE); 		// ct is the next block of ciphertext to be decrypted
-		aes_decrypt(ct, xor_buf, key_schedule, KEY_SIZE);                   // AES step, encrypted block goes to xor_buf
-		xor(tmp, xor_buf, pt, AES_BLOCK_SIZE);          					// XOR xor_buf block with tmp -> plaintext (pt)!
-		memcpy(&pt_buffer[i * AES_BLOCK_SIZE], pt, AES_BLOCK_SIZE);        	// move this pt block into result
-		memcpy(tmp, ct, AES_BLOCK_SIZE);       								// ct block is new tmp to XOR with next block of ct
+		// ct is the next block of ciphertext to be decrypted
+		memcpy(ct, &ciphertext[i * AES_BLOCK_SIZE], AES_BLOCK_SIZE);
+
+		// AES step, encrypted block goes to xor_buf
+		aes_decrypt(ct, xor_buf, key_schedule, KEY_SIZE);
+
+		// XOR xor_buf block with tmp -> plaintext (pt)!
+		xor(tmp, xor_buf, pt, AES_BLOCK_SIZE);
+
+		// move this pt block into the final result
+		memcpy(&pt_buffer[i * AES_BLOCK_SIZE], pt, AES_BLOCK_SIZE);
+
+		// ct block is new tmp to XOR with next block of ct
+		memcpy(tmp, ct, AES_BLOCK_SIZE);
 	}
 
 	// ----------------- REMOVE BUFFER --------------------
 
-	int n_bytes_pt = ct_size - pt_buffer[ct_size - 1]; 						// padding is held in last byte of decrypted buffer
-	if (n_bytes_pt <= 0) {													// if wrong password/corrupted, this can be <0, which cannot be processed
+	// padding is held in last byte of decrypted buffer
+	int n_bytes_pt = ct_size - pt_buffer[ct_size - 1];
+
+	// if wrong password/corrupted, this can be <0, which cannot be processed
+	if (n_bytes_pt <= 0) {
 		printf("Unable to decrypt file \"%s\". It is possible this "
 				"file has been corrupted. Are you sure you submitted "
 				"your password correctly?\n", fcontent->filename);
@@ -225,10 +268,12 @@ int cbc_aes_decrypt(FileContent *fcontent, BYTE *key) {
 	BYTE *plaintext = (BYTE*) malloc(sizeof(BYTE) * (n_bytes_pt + 1));
 	if (!plaintext) {
 		printf("Could not decrypt AES ciphertext because plaintext "
-			   "could not be allocated.\n");
+				"could not be allocated.\n");
 		return -1;
 	}
-	memcpy(plaintext, pt_buffer, n_bytes_pt);             					// move only plaintext without buffer into final result
+
+	// move only plaintext without buffer into final result
+	memcpy(plaintext, pt_buffer, n_bytes_pt);
 	memcpy(&plaintext[n_bytes_pt], "\0", 1);
 
 	// ------------------ SAVE PLAINTEXT --------------------
@@ -264,7 +309,8 @@ BYTE* create_padded_plaintext(BYTE *pt, int len_pt, int block_size) {
 
 	BYTE *padded_pt = (BYTE*) malloc(sizeof(BYTE) * (len_pt + pad_size));
 	if (!padded_pt) {
-		printf("Could not create padded plaintext due to issue allocating memory.\n");
+		printf("Could not create padded plaintext due to issue "
+				"allocating memory.\n");
 		return NULL;
 	}
 
@@ -352,7 +398,6 @@ int integrity_check(FileContent *fcontent, BYTE *key) {
 	return is_corrupted;
 }
 
-
 /**
  *  Compute a hash-based message authentication code (HMAC)
  *  based on a key and set of ciphertext. The algorithm for calculating
@@ -392,6 +437,7 @@ BYTE* compute_hmac_256(BYTE *key, BYTE *ct, size_t len_ct) {
 	xor(key, i_key_buf, key_i, SHA256_BLOCK_SIZE);
 
 	// ------- RUN SHA-256 TWICE OVER  -------------
+
 	size_t len_ct_key_i = len_ct + SHA256_BLOCK_SIZE;
 	BYTE ct_key_i[len_ct_key_i];
 
@@ -475,7 +521,7 @@ BYTE* get_random(size_t n_bytes) {
 	}
 
 	FILE *fp;
-	if(!(fp = fopen("/dev/random", "r"))) {
+	if (!(fp = fopen("/dev/random", "r"))) {
 		printf("Could not open /dev/random to generate IV.\n");
 		free(iv);
 		return NULL;
@@ -485,5 +531,4 @@ BYTE* get_random(size_t n_bytes) {
 
 	return iv;
 }
-
 

@@ -49,7 +49,8 @@ void get_hidden_pw(char *password);
 /* ------------------------------------------------------ */
 
 /**
- * Initializes an empty Request struct.
+ * Initializes an empty Request struct, allocating heap
+ * memory for the Request.
  *
  * @return pointer to the newly allocated, empty Request
  */
@@ -84,6 +85,10 @@ void free_request(Request *request) {
 
 	if (request->password)
 		free(request->password);
+
+	if (request->subcommand) {
+		free(request->subcommand);
+	}
 
 	if (request->files) {
 		for (int i = 0; i < request->n_files; i++) {

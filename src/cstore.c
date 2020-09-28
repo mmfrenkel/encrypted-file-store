@@ -89,7 +89,7 @@ int cstore_add(Request *request) {
 
 	if (!(key = convert_password_to_cryptographic_key(request->password,
 			PW_CRYPT_ITER))) {
-		printf("Couldn't convert password to cryptographic key");
+		printf("Sorry, could not convert password to cryptographic key.\n");
 		return -1;
 	}
 
@@ -139,6 +139,7 @@ int cstore_add(Request *request) {
 				fc->filename, request->archive);
 		free_file_content(fc);
 	}
+	free(key);
 	return 0;
 }
 
@@ -179,7 +180,7 @@ int cstore_extract(Request *request) {
 
 	if (!(key = convert_password_to_cryptographic_key(request->password,
 			PW_CRYPT_ITER))) {
-		printf("Couldn't convert password to cryptographic key");
+		printf("Sorry, could not convert password to cryptographic key.\n");
 		return -1;
 	}
 
@@ -220,6 +221,7 @@ int cstore_extract(Request *request) {
 			printf(".\n");
 		free_file_content(fc);
 	}
+	free(key);
 	return 0;
 
 }
@@ -264,7 +266,7 @@ int cstore_delete(Request *request) {
 
 	if (!(key = convert_password_to_cryptographic_key(request->password,
 			PW_CRYPT_ITER))) {
-		printf("Couldn't convert password to cryptographic key");
+		printf("Sorry, could not convert password to cryptographic key.\n");
 		return -1;
 	}
 
@@ -298,6 +300,7 @@ int cstore_delete(Request *request) {
 				request->archive);
 		free_file_content(fc);
 	}
+	free(key);
 	return 0;
 }
 

@@ -8,8 +8,8 @@
 #ifndef SRC_ENCRYPTION_H_
 #define SRC_ENCRYPTION_H_
 
-#include "sha256.h"
-#include "aes.h"
+#include "../encryption-algorithms/sha256.h"
+#include "../encryption-algorithms/aes.h"
 #include "file_io.h"
 
 #define PW_CRYPT_ITER 10000

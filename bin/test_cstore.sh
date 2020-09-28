@@ -59,5 +59,26 @@ echo -e "10. Attempting to delete file, which exists, but with a typo. It should
 echo "pass" | ./bin/cstore delete -p pass seasons fall_in_nycx.txt
 echo ""
 
+# TEST 11
+echo -e "11. Attempting to add file, but user forgot to submit an archive name.\n"
+echo "NYC is beautiful in the Fall!" > fall_in_nyc.txt
+./bin/cstore add -p pass fall_in_nyc.txt
+echo ""
+
+# TEST 12
+echo -e "12. Attempting to list files in an archive that doesn't exist.\n"
+./bin/cstore list archive_that_does_not_exist
+echo ""
+
+# TEST 13
+echo -e "13. Attempting to extract files from an archive that doesn't exist.\n"
+./bin/cstore extract -p pass archive_that_does_not_exist fall_in_nyc.txt
+echo ""
+
+# TEST 14
+echo -e "14. Attempting to delete files from an archive that doesn't exist.\n"
+./bin/cstore delete -p pass archive_that_does_not_exist fall_in_nyc.txt
+echo ""
+
 # CLEAN UP
 rm fall_in_nyc.txt

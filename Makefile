@@ -8,6 +8,7 @@
 SRC_DIR = src
 OBJ_DIR = obj
 BIN_DIR = bin
+LIB_DIR = encryption-algorithms
 TEST_DIR = tests
 ARCHIVE_DIR = ~/encrypted_filestore_archive
 
@@ -15,39 +16,48 @@ CC = gcc
 CFLAGS = -g -Wall -std=c11
 LDFLAGS = -g 
 
+# build main executable
 EXE = $(BIN_DIR)/cstore
 SRC = $(wildcard $(SRC_DIR)/*.c)
-OBJ = $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
+SRC_OBJ = $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
+LIB = $(wildcard $(LIB_DIR)/*.c)
+LIB_OBJ = $(LIB:$(LIB_DIR)/%.c=$(OBJ_DIR)/%.o)
 
+# build test executable, steps taken to ensure that there are not two conflicting 'mains'
 TEST_EXE = $(BIN_DIR)/test_cstore
 TEST_SRC = $(wildcard $(TEST_DIR)/*.c)
 TEST_OBJ = $(TEST_SRC:$(TEST_DIR)/%.c=$(OBJ_DIR)/%.o)
-TEST_FILT_SRC = $(filter-out src/cstore.c, $(wildcard $(SRC_DIR)/*.c))  # don't include the "main" of main cstore 
+TEST_FILT_SRC = $(filter-out src/cstore.c, $(wildcard $(SRC_DIR)/*.c)) 
 TEST_SRC_OBJ = $(TEST_FILT_SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
 .PHONY: clean base_archive build test
 
 all: clean build base_archive
 
-test: clean $(BIN_DIR) $(OBJ_DIR) $(TEST_EXE) 
-
 build: $(BIN_DIR) $(OBJ_DIR) $(EXE) 
 
-$(EXE): $(OBJ) | $(BIN_DIR)
+test: clean $(BIN_DIR) $(OBJ_DIR) $(TEST_EXE) 
+
+$(EXE): $(SRC_OBJ) $(LIB_OBJ) | $(BIN_DIR)
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+	
+# ---- compile encryption algorithms files separately ---
 
-#  ---- for testing compilation -----
+$(OBJ_DIR)/%.o: $(LIB_DIR)/%.c | $(OBJ_DIR)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-$(TEST_EXE): $(TEST_SRC_OBJ) $(TEST_OBJ) | $(BIN_DIR)
+# -----------------for testing -------------------------
+
+$(TEST_EXE): $(TEST_SRC_OBJ) $(TEST_OBJ) $(LIB_OBJ) | $(BIN_DIR)
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 	
 $(OBJ_DIR)/%.o: $(TEST_DIR)/%.c | $(OBJ_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 	
-#  ---------------------------------
+# ------------------------------------------------------
 
 $(BIN_DIR) $(OBJ_DIR) $(LOG_DIR):
 	mkdir -p $@
