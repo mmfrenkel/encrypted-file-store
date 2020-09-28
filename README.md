@@ -9,6 +9,7 @@ This file store has four main commands: `add`, `extract`, `delete` and `list`, e
 ```
 $ cd ~/encrypted_filestore_archive
 ```
+#### a. Add
 
 If a user wants to encrypt a new file (e.g., `apple.txt`) into an archive (e.g., `fruits`) they could issue the following command, providing their password within the command using the `-p` flag:
 
@@ -26,6 +27,7 @@ If a user prefers to not pass their password via the `-p` flag in echoed plainte
 $ ./bin/cstore add fruits apple.txt bananas.txt
 $ Please provide your password: 
 ```
+#### b. Extract
 
 Once a file is successfully added to an archive, it is easy to extract the file using the same password as it was initially encrypted with:
 
@@ -34,12 +36,23 @@ $ ./bin/cstore extract -p <password> fruits apple.txt bananas.txt
 ```
 This will extract the file from the encrypted file store into the current directory, however it will not delete it from the encrypted file store. Upon extracting the file from the file store, the program will perform an integrity check to alert users if their file may have been corrupted or tampered with. It is important for users to get their password correct, or else the decryption of the file will not be successful (they will end up with a file that looks like jibberish!). 
 
-In order to definitely delete the document from the archive:
+#### c. Delete
+
+In order to  delete the document from the archive:
 
 ```
 $ ./bin/cstore delete -p <password> fruits apple.txt bananas.txt
 ```
-Files are only deleted from an archive if users can be authenticated. If the user passes the wrong password, they will be unable to delete their file from the archive.
+Files are only deleted from an archive if users can be authenticated. If the user passes the wrong password, they will be unable to delete their file from the archive. 
+
+#### d. List
+
+To list all encrypted files currently in the archive:
+
+```
+$ ./bin/cstore list fruits
+```
+Note that a password is not required for this functionality.
 
 
 ## Design
@@ -76,7 +89,7 @@ As part of encryption, each plaintext file receives it's own IV for AES encrypti
 
 This project uses a single Makefile as a build automation tool. 
 
-#### Main Program 
+#### a. Main Program 
 
 To build the main executable for this program run:
 
@@ -98,7 +111,7 @@ This nicely allows a user to issue `cstore` instead of `./bin/cstore` to run the
 ```
 $ sudo make uninstall
 ```
-#### Testing Program 
+#### b. Testing Program 
 
 There are two sets of tests for this program: (1) unit tests and (2) a bash script that runs various iterations of possible user commands. While the unit tests ensure that the encryption steps are functioning properly, the bash script tests are mostly to confirm that the program can handle various scenarios of user inputs with grace and without throwing any errors.
 
@@ -134,7 +147,7 @@ $ sudo apt update
 $ sudo apt install build-essential
 ```
 
-Additionally, `gdb` and `valgrind` where installed and used for debugging and to check for memory leaks, respectively:
+Additionally, `gdb` and `valgrind` were installed and used for debugging and to check for memory leaks, respectively:
 ```
 $ sudo apt install gdb
 $ sudo apt install valgrind
