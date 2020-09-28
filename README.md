@@ -46,7 +46,7 @@ Files are only deleted from an archive if users can be authenticated. If the use
 
 In order to perform the central encryption/decryption functions of an encrypted file archive, this project utiltizes the several encryption functions. The original source code for these functions was created by Brad Conte and found at https://github.com/B-Con/crypto-algorithms. For this project, the code lives in a separate directory (`/encryption-algorithsm`) from the `src` code written as part of this project.
 
-#### I. AES CBC Encryption
+### I. AES CBC Encryption
 
 In order to encrypt and decrypt files, this project makes use of the Advanced Encryption Standard (AES). AES is a block cipher, taking 16 bytes (128 bits) at a time to produce 16 bytes of ciphertext. Here, cipher block chaining (CBC) mode was used to encrypt the whole plaintext, with each plaintext block exclusive-ORed with the previous ciphertext block before encryption. This approach is advantageous because it allows two identifical plaintext blocks to be encrypted differently and thus avoids the dreaded Linux Penguin effect of modes like the electronic code book (ECB) mode. 
 
@@ -54,7 +54,7 @@ The CBC approach requires an initialization vector (IV), an extra block of truly
 
 Finally, the key used in the AES encryption is derived from the user-provided password. Upon submission, the user's password is iteratively hashed 10,000 times using SHA-256. This hashed password is used in AES as well as HMAC integrity checking (keep reading).
 
-#### II. Integrity Check with Hash-Based Authentication Code (HMAC)
+### II. Integrity Check with Hash-Based Authentication Code (HMAC)
 
 To provide users with confidence that their file content has been tampered with or corrupted, it was necessary to provide a means of authentication and integtrity checking. This is accomplished using a hash-based authenticate code, or HMAC. Here, an HMAC hash was determined for each file using the cryptographic key derived from a user's password (`k`) and the ciphertext (`ct`). For this project, the algorithm for calculating the HMAC includes these three distinct steps:
 
@@ -66,7 +66,7 @@ HMAC expressed in an equation: `HMAC(ct, k) = H(opad XOR k || (H(ipad XOR k || c
 
 This HMAC hash is then appended to the ciphertext and stored in the encrypted file. This enables an integrity check to be achieved by comparing the initial HMAC hash assigned to an encrypted file (which is read in from the file on decryption) with the HMAC code that is recomputed from ciphertext read in from the file store and password-derived cryptographic key. The integrity check fails if the two HMAC hashes do not match. This can be achieved if either (a) a user submits the wrong password or (b) a file has been corrupted in storage. Users are warned of possible integrity violations as part of the program. Additionally, given that the HMAC is reliant on a user's submitted password, this HMAC code is used similarly for determining whether a user is allowed to delete a file from the file store. 
 
-#### III. The "TLDR"
+### III. The "TLDR"
 As part of encryption, each plaintext file receives it's own IV for AES encryption using CBC mode and it's own HMAC hash derived from it's corresponding ciphertext. In order to make decryption and integrity checking possible, each encrypted file in the file store is really a concatination of IV + ciphertext + HMAC, such that the initial IV and HMAC are recoverable for decryption.
 
 
@@ -76,12 +76,14 @@ As part of encryption, each plaintext file receives it's own IV for AES encrypti
 
 This project uses a single Makefile as a build automation tool. 
 
+#### Main Program 
+
 To build the main executable for this program run:
 
 ```
 $ make all
 ```
-This will clean and compile the code, creating a new executable `./bin/cstore` that should be used to run the file store. It will also create a new directory within your home directory called `encrypted_filestore_archive` that serves as the base directory that all archives live within. You can confirm that this base directory was created:
+This will clean and compile the code, creating a new executable `./bin/cstore` that should be used to run the file store. It will also create a new directory within your home directory called `encrypted_filestore_archive` that serves as the base directory that all archives. You can confirm that this base directory was created:
 
 ```
 $ ~/encrypted_filestore_archive
@@ -91,11 +93,12 @@ If you'd like to actually install the project (i.e., not just build the executab
 ```
 $ sudo make install
 ```
-Note that this command assumes that `/usr/local/bin` is on the `PATH` and that files can be moved to it, so it is recommened to only use `make install` if using a Linux OS. However, this nicely allows a user to issue `cstore` instead of `./bin/cstore` to run the program. The downside is that you'll need to continue using `sudo` commands in order to re-build the make file (otherwise you'll get a permissions error). If you install and later decide that it isn't for you:
+This nicely allows a user to issue `cstore` instead of `./bin/cstore` to run the program. Note, however, that this command assumes that `/usr/local/bin` is on your system `PATH` and that binaries can be moved to it; hence, this command is only recommended if running this program on a Linux OS. Additionally, the downside is that you'll need to continue using `sudo` for any Makefile command (i.e., `sudo make all`), otherwise you'll get a permissions error. If you install and later decide that it isn't for you:
 
 ```
 $ sudo make uninstall
 ```
+#### Testing Program 
 
 There are two sets of tests for this program: (1) unit tests and (2) a bash script that runs various iterations of possible user commands. While the unit tests ensure that the encryption steps are functioning properly, the bash script tests are mostly to confirm that the program can handle various scenarios of user inputs with grace and without throwing any errors.
 
@@ -131,7 +134,7 @@ $ sudo apt update
 $ sudo apt install build-essential
 ```
 
-Additionally, `gdb` and `valgrind` where installed via:
+Additionally, `gdb` and `valgrind` where installed and used for debugging and to check for memory leaks, respectively:
 ```
 $ sudo apt install gdb
 $ sudo apt install valgrind
