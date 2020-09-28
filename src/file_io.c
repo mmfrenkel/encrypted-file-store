@@ -1,6 +1,12 @@
 /*
  * file_io.c
  *
+ * Contains functions necessary to perform I/O operations
+ * required for files. Implements the ability to read and
+ * write plaintext and ciphertext files into organized
+ * FileContent structs that can be utilized in other areas
+ * of the filestore program.
+ *
  *  Created on: Sep 23, 2020
  *      Author: meganfrenkel
  */
@@ -36,7 +42,13 @@ int extract_file_content(char *file_path, BYTE **content);
 
 /* ------------------------------------------------------ */
 
-
+/**
+ * Frees any memory associated with a specified
+ * FileContent struct, including all of the members
+ * of the struct that have memory allocated.
+ *
+ * @param pointer for a FileContent struct
+ */
 void free_file_content(FileContent *fc) {
 
 	if(!fc) return;
@@ -55,7 +67,13 @@ void free_file_content(FileContent *fc) {
 }
 
 /**
- * Find if an archive exists in the archive directory.
+ * Determine if an archive directory already exists within the base
+ * archive directory.
+ *
+ * @param archive_base_path, the base path for where ALL archives are
+ * 							 stored within a user's file system
+ * @param archive_name, the name of the archive
+ * @return true, if the archive directory alreadt exists
  */
 bool archive_exists(char *archive_base_path, char *archive_name) {
 
@@ -89,7 +107,12 @@ bool archive_exists(char *archive_base_path, char *archive_name) {
 }
 
 /**
+ * Prints out all filenames in a specified archive.
  *
+ * @param archive_base_path, the base path for where ALL archives are
+ * 							 stored within a user's file system
+ * @param archive_name, the name of the archive
+ * @return 0 if listing was successful, -1 if an error occurred
  */
 int list_archive_files(char *archive_base_path, char *archive_name) {
 
@@ -137,6 +160,14 @@ int list_archive_files(char *archive_base_path, char *archive_name) {
 	return 0;
 }
 
+/**
+ * Creates a new directory for a new archive within the archive "base"
+ * folder, where all archives can be accessed.
+ *
+ * @param archive_base_path, the base path for where ALL archives are
+ * 							 stored within a user's file system
+ * @param archive_name, the name of the archive
+ */
 char* create_archive_folder(char *arch_base_path, char *archive_name) {
 
 	char *absolute_base_dir = get_absolute_path_archive(arch_base_path);
@@ -154,7 +185,20 @@ char* create_archive_folder(char *arch_base_path, char *archive_name) {
 }
 
 /**
+ * Opens a plaintext file, and extracts its contents into a
+ * new FileContent. The FileContent created will have no information
+ * about any ciphertext, as the ciphertext has yet to be created. Only
+ * the size of the plaintext, the plaintext content, and the filename
+ * are "filled in."
  *
+ * Critically, this function assumes that all files that should be
+ * encrypted are in the current directory that the user is in when they
+ * run the program, or that the user has specified the entire path of
+ * the file as the filename in the command line.
+ *
+ * @param filename, the name of the file, may or may not specify the
+ * 	 				path to the file, depending on the location.
+ * @return pointer to a newly allocated FileContent struct
  */
 FileContent* open_plaintext_file(char *filename) {
 
@@ -180,7 +224,30 @@ FileContent* open_plaintext_file(char *filename) {
 }
 
 /**
+ * Opens and parses contents of an encrypted file into a new
+ * FileContent struct. All encrypted files follow the same format:
  *
+ * [IV] + [CIPHERTEXT] + [HMAC]
+ *
+ *  * The IV (initialization vector) represents the initial set of
+ *    truly random characters that goes into AES encryption using cipher-block
+ *    chaining (CBC). This is required to properly decrypt the encrypted
+ *    file (see cryption.c).
+ *
+ *  * The ciphertext is the encrypted plaintext content from
+ *    the original file.
+ *
+ *  * HMAC is used as the message authentication code to alert users if
+ *    their file may be corrupted (see encryption.c).
+ *
+ * @param base_path, the base path for where ALL archives are
+ * 					 stored within a user's file system
+ * @param archive, the name of the archive
+ * @param filename, the name of the original plaintext file to reopen
+ * @param len_iv, the length of the IV. This will be the size of a AES block,
+ * 				  if CBC is used
+ * @param len_hmac_hash, the length of the hmac hash
+ * @return new FileContent containing the parsed components of the encrypted file.
  */
 FileContent* open_encrypted_file(char *base_path, char *archive, char *filename,
 		size_t len_iv, size_t len_hmac_hash) {
@@ -196,10 +263,10 @@ FileContent* open_encrypted_file(char *base_path, char *archive, char *filename,
 	int n_bytes = extract_file_content(file_path, &content);
 	if (n_bytes < 0) {
 		return NULL;
-	}
-	else if (n_bytes == 0) {
+	} else if (n_bytes == 0) {
 		printf("The encrypted file %s has no contents; this is probably not what you were "
-				"expecting. This file may have been tampered with.\n", filename);
+				"expecting. This file may have been tampered with.\n",
+				filename);
 		return NULL;
 	}
 
@@ -212,7 +279,32 @@ FileContent* open_encrypted_file(char *base_path, char *archive, char *filename,
 }
 
 /**
+ * Writes information stored in FileContents to a file in the
+ * encrypted archive directory. The final encrypted file contains three
+ * pieces of information, in this order:
  *
+ * [IV] + [CIPHERTEXT] + [HMAC]
+ *
+ *  * The IV (initialization vector) represents the initial set of
+ *    truly random characters that goes into AES encryption using cipher-block
+ *    chaining (CBC). This is required to properly decrypt the encrypted
+ *    file (see cryption.c).
+ *
+ *  * The ciphertext is the encrypted plaintext content from
+ *    the original file.
+ *
+ *  * HMAC is used as the message authentication code to alert users if
+ *    their file may be corrupted (see encryption.c).
+ *
+ * @param base_path, the base path for where ALL archives are
+ * 					 stored within a user's file system
+ * @param archive, the name of the archive
+ * @param fcontent, FileContent containing the parsed components of the
+ * 					encrypted file.
+ * @param len_iv, the length of the IV. This will be the size of a AES block,
+ * 				  if CBC is used
+ * @param len_hmac_hash, the length of the hmac hash
+ * @return 0 if write is successful -1 if there is an error
  */
 int write_ciphertext_to_file(char *base_path, char *archive,
 		FileContent *fcontent, size_t len_iv, size_t len_hmac_hash) {
@@ -250,23 +342,31 @@ int write_ciphertext_to_file(char *base_path, char *archive,
 }
 
 /**
+ * Writes plaintext content stored in a FileContent struct
+ * to a plaintext file in the current directory. In order to write
+ * the file, the plaintext bytes and the size of the file must not
+ * be NULL (other ciphertext information is not required).
  *
+ * @param fcontent, FileContent containing the parsed components of the
+ * 					plaintext file.
  */
 int write_plaintext_to_file(FileContent *fcontent) {
 	return write_content_to_file(fcontent->filename, fcontent->plaintext,
 			fcontent->n_plaintext_bytes, "w");
 }
 
-/* Permanently deletes entire file */
-int delete_file(char *file_path) {
-	int del = remove(file_path);
-	if (del) {
-		printf("File did not delete properly. Please check on %s", file_path);
-		return -1;
-	}
-	return 0;
-}
 
+/**
+ * Deletes a file from an archive, permanently. The method
+ * will construct the full path to the file from the various
+ * components. Filename should just be the name of the file.
+ *
+ * @param base_path, the base path for where ALL archives are
+ * 					 stored within a user's file system
+ * @param archive, the name of the archive
+ * @param filename, the name of the file to delete
+ * @return 0 if deletion was successful, -1 if error
+ */
 int delete_file_from_archive(char *base_path, char *archive, char *filename) {
 
 	// get full path of where file should be
@@ -282,7 +382,31 @@ int delete_file_from_archive(char *base_path, char *archive, char *filename) {
 }
 
 /**
+ * Permenantly deletes a file, specified by its file path.
  *
+ * @param file_path, the path of a file to delete
+ * @return 0 if deletion was successful, -1 if error
+ */
+int delete_file(char *file_path) {
+	int del = remove(file_path);
+	if (del) {
+		printf("File did not delete properly. Please check on %s", file_path);
+		return -1;
+	}
+	return 0;
+}
+
+/**
+ *  Initializes/allocates memory for new FileContent struct
+ *  containing information about file plaintext. It is assumed
+ *  that nothing is known about the ciphertext or other content, so
+ *  those fields are initialized to NULL (or 0, where applicable).
+ *
+ *  @param filename, the name of the file
+ *  @param content, the plaintext content as an array of BYTES (unsigned chars)
+ *  @param n_bytes, the number of plaintext bytes in the file
+ *  return newly allocated FileContent struct, with plaintext information;
+ *  	   NULL if an issue was encountered
  */
 FileContent* init_file_content_pt(char *filename, BYTE *content, size_t n_bytes) {
 
@@ -293,9 +417,10 @@ FileContent* init_file_content_pt(char *filename, BYTE *content, size_t n_bytes)
 	}
 
 	// FileContent struct should get it's own memory copy of the filename
-	char *filename_cpy = (char *) malloc(strlen(filename) * (sizeof(char) + 1));
+	char *filename_cpy = (char*) malloc(strlen(filename) * (sizeof(char) + 1));
 	if (!filename_cpy) {
-		printf("Failed to allocate memory for filename copy in file content.\n");
+		printf("Failed to allocate memory for filename copy in "
+				"file content.\n");
 		free(file);
 		return NULL;
 	}
@@ -306,7 +431,7 @@ FileContent* init_file_content_pt(char *filename, BYTE *content, size_t n_bytes)
 	file->plaintext = content;
 	file->n_plaintext_bytes = n_bytes;
 
-	// no info about the encryption of this file yet; will be filled out as needed later
+	// no info about the encryption of this file yet; will be filled out later
 	file->ciphertext = NULL;
 	file->n_ciphertext_bytes = 0;
 	file->iv = NULL;
@@ -315,9 +440,26 @@ FileContent* init_file_content_pt(char *filename, BYTE *content, size_t n_bytes)
 	return file;
 }
 
-
 /**
+ *  Initializes/allocates memory for new FileContent struct
+ *  containing information about file ciphertext. It is assumed
+ *  that nothing is known about the plaintext or plaintext size, so
+ *  those fields are initialized to NULL (or 0, where applicable).
  *
+ *  The ciphertext content is initially the entire content retrieved
+ *  from the file; this method parses out the individual components
+ *  of that content: [IV] + [CIPHERTEXT] + [HMAC]. You can read more
+ *  about these components in the write_ciphertext_to_file() function
+ *  and in encryption.c.
+ *
+ *  @param filename, the name of the file
+ *  @param content, the plaintext content as an array of BYTES (unsigned chars)
+ *  @param n_bytes, the number of ciphertext bytes in the file
+ *  @param len_iv, the length of the IV. This will be the size of a AES block,
+ * 				   if CBC is used
+ * 	@param len_hmac_hash, the length of the hmac hash
+ *  return newly allocated FileContent struct, with plaintext information;
+ *  	   NULL if an issue was encountered
  */
 FileContent* init_file_content_ct(char *filename, BYTE *content, size_t n_bytes,
 		size_t len_iv, size_t len_hmac_hash) {
@@ -329,23 +471,24 @@ FileContent* init_file_content_ct(char *filename, BYTE *content, size_t n_bytes,
 	}
 
 	// we need to parse information out of the encrypted content (i.e., IV, ciphertext, HMAC)
-	BYTE* iv = (BYTE *) malloc(sizeof(BYTE) * len_iv);
+	BYTE *iv = (BYTE*) malloc(sizeof(BYTE) * len_iv);
 	if (!iv) {
 		printf("Could not allocate memory for IV from encrypted file.\n");
 		return NULL;
 	}
 
 	size_t ct_bytes = n_bytes - len_iv - len_hmac_hash;
-	BYTE *ct = (BYTE *) malloc(sizeof(BYTE) * ct_bytes);
+	BYTE *ct = (BYTE*) malloc(sizeof(BYTE) * ct_bytes);
 	if (!ct) {
 		printf("Could not allocate memory for ciphertext.\n");
 		free(iv);
 		return NULL;
 	}
 
-	BYTE *hmac_hash = (BYTE *) malloc(sizeof(BYTE) * len_hmac_hash);
+	BYTE *hmac_hash = (BYTE*) malloc(sizeof(BYTE) * len_hmac_hash);
 	if (!hmac_hash) {
-		printf("Could not allocate memory for HMAC hash from encrypted file.\n");
+		printf(
+				"Could not allocate memory for HMAC hash from encrypted file.\n");
 		free(iv);
 		free(ct);
 		return NULL;
@@ -353,12 +496,13 @@ FileContent* init_file_content_ct(char *filename, BYTE *content, size_t n_bytes,
 
 	memcpy(iv, content, len_iv);
 	memcpy(ct, &content[len_iv], ct_bytes);
-	memcpy(hmac_hash,  &content[len_iv + ct_bytes], len_hmac_hash);
+	memcpy(hmac_hash, &content[len_iv + ct_bytes], len_hmac_hash);
 
 	// FileContent struct should get it's own memory copy of the filename
-	char *filename_cpy = (char *) malloc(strlen(filename) * (sizeof(char) + 1));
+	char *filename_cpy = (char*) malloc(strlen(filename) * (sizeof(char) + 1));
 	if (!filename_cpy) {
-		printf("Failed to allocate memory for filename copy in file content.\n");
+		printf(
+				"Failed to allocate memory for filename copy in file content.\n");
 		free(file);
 		return NULL;
 	}
@@ -381,10 +525,17 @@ FileContent* init_file_content_ct(char *filename, BYTE *content, size_t n_bytes,
 /**
  * Extracts all content from a file at the provided file path and saves
  * it into memory pointed to by content. The method allocates the required
- * amount of memory to hold the entire file content.
+ * amount of memory to hold the entire file content and returns the number
+ * of bytes retrieved from that file.
  *
+ * The approach to opening and retrieving file content in this manner was
+ * inspired by a posting by NateS on StackOverflow on September 24, 2020.
+ * More information about this most can be found here:
  * https://stackoverflow.com/questions/22059189/read-a-file-as-byte-array
- * https://www.tutorialspoint.com/c_standard_library/c_function_ftell.htm
+ *
+ * @param file_path, the full path to the file to open
+ * @parm content, a pointer to an array to hold the file's content
+ * @return the number of BYTEs (unsigned char) retrieved from the file
  */
 int extract_file_content(char *file_path, BYTE **content) {
 
@@ -415,7 +566,15 @@ int extract_file_content(char *file_path, BYTE **content) {
 }
 
 /**
+ * Writes a specified number of bytes of provided content to a
+ * specified file.
  *
+ * @param file_path, the full path to the file to write to
+ * @param content, pointer to an array of BYTEs (unsigned char) holding
+ * 		     	   content to write to the file
+ * @param n_bytes, the number of BYTEs of content to write to the file
+ * @param write_mode, the mode to open/write to the file with
+ * @return 0 if write is successful, -1 if an error occurred
  */
 int write_content_to_file(char *file_path, BYTE *content, size_t n_bytes,
 		char *write_mode) {
@@ -434,7 +593,17 @@ int write_content_to_file(char *file_path, BYTE *content, size_t n_bytes,
 }
 
 /**
+ * Gets the current home directory for the user; equivalent
+ * to running in a shell:
+ *   $> cd ~
+ *   $> pwd
+ *
+ * This strategy for this method was inspired by a post
+ * by R Samuel Klatchko on StackOverflow, accessed on September 24, 2020.
+ * More information about this source and contribution can be found here:
  * https://stackoverflow.com/questions/2910377/get-home-directory-in-linux
+ *
+ * @return the full path of the current home directory
  */
 char* get_home_dir() {
 
@@ -452,7 +621,12 @@ char* get_home_dir() {
 }
 
 /**
+ * Helper function for creating an absolute archive path, from
+ * a relative archive base path by concating information about
+ * a user's home directory
  *
+ * @param rel_arc_base_path, relative archive base path (relative to ~)
+ * @return absolute system path to the archive directory
  */
 char* get_absolute_path_archive(char *rel_arc_base_path) {
 
@@ -473,29 +647,16 @@ char* get_absolute_path_archive(char *rel_arc_base_path) {
 	free(base_dir);
 	return absolute_dir;
 }
-
 /**
+ * Helper function to create the absolute path to a file within
+ * the encrypted filestore archive.
  *
- */
-char* concat_path(char *str1, char *str2) {
-
-	// get the full path of the archive
-	int len1 = strlen(str1);
-	int len2 = strlen(str2);
-	char *new_str = (char*) malloc(sizeof(char) * (len1 + len2 + 1));
-
-	if (!new_str) {
-		printf("Could not allocate memory for concatenated string.\n");
-		return NULL;
-	}
-
-	memcpy(new_str, str1, len1);
-	memcpy(new_str + len1, str2, len2 + 1);
-	return new_str;
-}
-
-/**
- *
+ * @param base_path, the path for the base directory for all archives
+ * 	                 that are a part of the encrypted file store,
+ * 	                 relative to ~
+ * @param archive, name of the archive
+ * @param filename, name of the file (not a file path)
+ * @return absolute system path to the file within the archive
  */
 char* get_full_filepath_in_archive(char *base_path, char *archive,
 		char *filename) {
@@ -527,3 +688,30 @@ char* get_full_filepath_in_archive(char *base_path, char *archive,
 
 	return full_file_path;
 }
+
+/**
+ * Helper function to concat two components of a file path
+ * together. This is performed as a simple string concatination,
+ * with memory allocated on the heap for the new string.
+ *
+ * @param str1, first component of string to be created
+ * @param str2, second component of string to be created
+ * @return new, concatinated string
+ */
+char* concat_path(char *str1, char *str2) {
+
+	// get the full path of the archive
+	int len1 = strlen(str1);
+	int len2 = strlen(str2);
+	char *new_str = (char*) malloc(sizeof(char) * (len1 + len2 + 1));
+
+	if (!new_str) {
+		printf("Could not allocate memory for concatenated string.\n");
+		return NULL;
+	}
+
+	memcpy(new_str, str1, len1);
+	memcpy(new_str + len1, str2, len2 + 1);
+	return new_str;
+}
+

@@ -42,5 +42,6 @@ Request* parse_request(int argc, char *argv[]);
 
 void print_subcommand_options();
 
-#endif /* SRC_USER_IO_H_ */
+void alert_no_archive(char *archive);
 
+#endif /* SRC_USER_IO_H_ */

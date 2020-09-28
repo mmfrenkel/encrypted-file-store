@@ -13,8 +13,9 @@
 #include "file_io.h"
 #include "encryption.h"
 
-void alert_no_archive(char *archive);
-
+/**
+ * Main function of encrypted filestore.
+ */
 int main(int argc, char *argv[]) {
 
 	int error = 0;
@@ -42,7 +43,12 @@ int main(int argc, char *argv[]) {
 }
 
 /**
+ * Lists all files within a specified encrypted filestore archive.
  *
+ * @param request, Request struct containing information about
+ * 				   a user's submitted request. Request must have
+ * 				   the name of the archive properly assigned.
+ * @return 0 if success, -1 if error
  */
 int cstore_list(Request *request) {
 
@@ -51,12 +57,19 @@ int cstore_list(Request *request) {
 		alert_no_archive(request->archive);
 		return 0;
 	}
-
 	return list_archive_files(ARCHIVE_DIR, request->archive);
 }
 
 /**
+ * Adds all files specified in a user's request to a specified
+ * archive within the encrypted filestore. The Request must have
+ * the archive name, user password, number of files, and file
+ * names specified. If any issues are encountered with submitted files,
+ * other files are attempted before the program ends.
  *
+ * @param request, Request struct containing information about
+ * 				   a user's submitted request for encryption.
+ * @return 0 if success, -1 if error
  */
 int cstore_add(Request *request) {
 
@@ -69,16 +82,17 @@ int cstore_add(Request *request) {
 	}
 
 	if (!archive_exists(ARCHIVE_DIR, request->archive)) {
-		printf("Archive %s does not yet exist, so creating it...\n", request->archive);
+		printf("Archive %s does not yet exist, so creating it...\n",
+				request->archive);
 		create_archive_folder(ARCHIVE_DIR, request->archive);
 	}
 
-	if (!(key = convert_password_to_cryptographic_key(request->password))) {
+	if (!(key = convert_password_to_cryptographic_key(request->password,
+			PW_CRYPT_ITER))) {
 		printf("Couldn't convert password to cryptographic key");
 		return -1;
 	}
 
-	// add list of files to archive
 	for (int i = 0; i < request->n_files; i++) {
 
 		FileContent *fc = open_plaintext_file(request->files[i]);
@@ -108,7 +122,7 @@ int cstore_add(Request *request) {
 		}
 
 		if ((error = write_ciphertext_to_file(ARCHIVE_DIR, request->archive, fc,
-				AES_BLOCK_SIZE, SHA256_BLOCK_SIZE))) {
+		AES_BLOCK_SIZE, SHA256_BLOCK_SIZE))) {
 			printf("Couldn't write encrpyted content to file "
 					"for %s\n", fc->filename);
 			free_file_content(fc);
@@ -121,15 +135,31 @@ int cstore_add(Request *request) {
 					"unencrypted file for %s\n", fc->filename);
 		}
 
-		printf(" * Succesfully encrypted \"%s\" within archive \"%s.\"\n", fc->filename,
-				request->archive);
+		printf(" * Succesfully encrypted \"%s\" within archive \"%s.\"\n",
+				fc->filename, request->archive);
 		free_file_content(fc);
 	}
 	return 0;
 }
 
 /**
+ * Extracts all files specified in a user's request from the
+ * encrypted file store archive specified. The Request must have
+ * the archive name, user password, number of files, and file
+ * names specified. If any issues are encountered with submitted files,
+ * other files are attempted before the program ends.
  *
+ * In the process of extraction, files will be checked for corruption
+ * based on their hash-based authentication code (read more about the HMAC
+ * function used in this project within encryption.c). If a file has an
+ * integrity concern, it is still extracted (it will be jibberish), but
+ * the user is warned that their file is likely compromised. It's possible
+ * that the HMAC authentication fails due to an incorrect password. In that
+ * case, the user can simply try again.
+ *
+ * @param request, Request struct containing information about
+ * 				   a user's submitted request for decryption.
+ * @return 0 if success, -1 if error
  */
 int cstore_extract(Request *request) {
 	int error;
@@ -147,12 +177,12 @@ int cstore_extract(Request *request) {
 		return 0;
 	}
 
-	if (!(key = convert_password_to_cryptographic_key(request->password))) {
+	if (!(key = convert_password_to_cryptographic_key(request->password,
+			PW_CRYPT_ITER))) {
 		printf("Couldn't convert password to cryptographic key");
 		return -1;
 	}
 
-	// add list of files to archive
 	for (int i = 0; i < request->n_files; i++) {
 
 		FileContent *fc = open_encrypted_file(ARCHIVE_DIR, request->archive,
@@ -182,19 +212,39 @@ int cstore_extract(Request *request) {
 			continue;
 		}
 
-		printf(" * Decrypted \"%s\" from archive \"%s\"", fc->filename, request->archive);
-		if (is_compromised) printf(", but remember, it has been compromised... :(\n");
-		else printf(".\n");
-
+		printf(" * Decrypted \"%s\" from archive \"%s\"", fc->filename,
+				request->archive);
+		if (is_compromised)
+			printf(", but remember, it has been compromised... :(\n");
+		else
+			printf(".\n");
 		free_file_content(fc);
 	}
-
 	return 0;
 
 }
 
 /**
+ * Deletes all files specified in a user's request from the
+ * encrypted file store archive specified. The Request must have
+ * the archive name, user password, number of files, and file
+ * names specified. If any issues are encountered with submitted files,
+ * other files are attempted before the program ends.
+
+ * In order to make sure that unauthorized users do not delete the file,
+ * the file is first opened and the hash-based authentication code
+ * (HMAC) stored within the file is verified against a recalculated HMAC
+ * from the opened ciphertext content. If the HMAC hashes match, the
+ * authentication of the user can be confirmed and the file can be deleted.
+ * If an unauthorized user submits an incorrect password, the HMAC
+ * hashes will not match and the file will not be deleted. Note: if a
+ * file is encrypted, it may make it look like the user isn't authenicated.
+ * For this reason, the user is alerted that they're either unauthorized
+ * to delete files or the file is compromised.
  *
+ * @param request, Request struct containing information about
+ * 				   a user's submitted request for deletion.
+ * @return 0 if success, -1 if error
  */
 int cstore_delete(Request *request) {
 	BYTE *key;
@@ -212,7 +262,8 @@ int cstore_delete(Request *request) {
 		return 0;
 	}
 
-	if (!(key = convert_password_to_cryptographic_key(request->password))) {
+	if (!(key = convert_password_to_cryptographic_key(request->password,
+			PW_CRYPT_ITER))) {
 		printf("Couldn't convert password to cryptographic key");
 		return -1;
 	}
@@ -227,36 +278,26 @@ int cstore_delete(Request *request) {
 			continue;
 		}
 
-		if ((error = cbc_aes_decrypt(fc, key))) {
-			printf("Cannot verify that you can delete this file (%s).\n", fc->filename);
-			free_file_content(fc);
-			continue;
-		}
-
 		if ((is_compromised = integrity_check(fc, key))) {
-			printf("INTEGRITY ALERT: Cannot delete %s. Either you are not the owner or this file "
-					"is corrupted, so your identity cannot be confirmed.", fc->filename);
+			printf("INTEGRITY ALERT: Cannot delete %s. Either you are "
+				   "authorized to delete this file or this file is corrupted."
+				   "Either way, your identity cannot be confirmed.",
+					fc->filename);
 			free_file_content(fc);
 			continue;
 		}
 
 		if ((error = delete_file_from_archive(ARCHIVE_DIR, request->archive,
 				request->files[i]))) {
-			printf("Cannot delete %s. There was an error on deletion.", fc->filename);
+			printf("Cannot delete %s. There was an error on deletion.",
+					fc->filename);
 			free_file_content(fc);
 			continue;
 		}
-
-		printf(" * Deleted \"%s\" from archive \"%s.\"\n", fc->filename, request->archive);
+		printf(" * Deleted \"%s\" from archive \"%s.\"\n", fc->filename,
+				request->archive);
 		free_file_content(fc);
-
 	}
 	return 0;
-}
-
-void alert_no_archive(char *archive) {
-	printf("The archive '%s' specified doesn't exist yet. Run "
-			"'cstore add' to create a new archive and add files, "
-			"or specify another archive.\n", archive);
 }
 

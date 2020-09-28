@@ -15,7 +15,7 @@
 #define PW_CRYPT_ITER 10000
 #define KEY_SIZE 256 // key size will always be 256, because we SHA-256 hash the pw to find key
 
-BYTE* convert_password_to_cryptographic_key(char *pt_password);
+BYTE* convert_password_to_cryptographic_key(char *pt_password, int iterations);
 
 int cbc_aes_encrypt(FileContent *fcontent, BYTE *key);
 
