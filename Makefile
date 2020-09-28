@@ -30,13 +30,15 @@ TEST_OBJ = $(TEST_SRC:$(TEST_DIR)/%.c=$(OBJ_DIR)/%.o)
 TEST_FILT_SRC = $(filter-out src/cstore.c, $(wildcard $(SRC_DIR)/*.c)) 
 TEST_SRC_OBJ = $(TEST_FILT_SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
-.PHONY: clean base_archive build test
+.PHONY: clean base_archive build test install
 
 all: clean build base_archive
 
 build: $(BIN_DIR) $(OBJ_DIR) $(EXE) 
 
 test: clean $(BIN_DIR) $(OBJ_DIR) $(TEST_EXE) 
+
+install: clean build base_archive cp_to_path
 
 $(EXE): $(SRC_OBJ) $(LIB_OBJ) | $(BIN_DIR)
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
@@ -61,6 +63,9 @@ $(OBJ_DIR)/%.o: $(TEST_DIR)/%.c | $(OBJ_DIR)
 
 $(BIN_DIR) $(OBJ_DIR) $(LOG_DIR):
 	mkdir -p $@
+	
+cp_to_path:
+	cp ./bin/cstore /usr/local/bin/cstore
 
 base_archive:
 	mkdir -p $(ARCHIVE_DIR)
