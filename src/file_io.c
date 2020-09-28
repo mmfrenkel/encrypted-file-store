@@ -88,8 +88,9 @@ bool archive_exists(char *archive_base_path, char *archive_name) {
 	struct dirent *de;
 	DIR *dir = opendir(archive_dir);
 	if (!dir) {
-		printf("Could not find the base archive location %s; run 'make base_archive' "
-				"to create it before continuing\n", archive_dir);
+		printf("Could not find the base archive location %s; run "
+				"'make base_archive' to create it before continuing\n",
+				archive_dir);
 		exit(1);
 	}
 
@@ -167,21 +168,25 @@ int list_archive_files(char *archive_base_path, char *archive_name) {
  * @param archive_base_path, the base path for where ALL archives are
  * 							 stored within a user's file system
  * @param archive_name, the name of the archive
+ * @returns 1 if creation of archive folder was successful else -1
  */
-char* create_archive_folder(char *arch_base_path, char *archive_name) {
+int create_archive_folder(char *arch_base_path, char *archive_name) {
 
 	char *absolute_base_dir = get_absolute_path_archive(arch_base_path);
 	char *new_archive_dir = concat_path(absolute_base_dir, archive_name);
 
-	int error;
-	// 0700 to provide owner rights only
+	int error = 0;
+
+	// 0700 so that only owners have the ability to read, write and execute
 	if ((error = mkdir(new_archive_dir, 0700))) {
 		printf("Failed to create the new archive. Please try again.\n");
-		exit(1);
 	}
 
+	// clean up
 	free(absolute_base_dir);
-	return new_archive_dir;
+	free(new_archive_dir);
+
+	return error;
 }
 
 /**
@@ -207,12 +212,14 @@ FileContent* open_plaintext_file(char *filename) {
 
 	int n_bytes  = extract_file_content(filename, &content);
 
-	// here we assume that the plaintext file is given as a full path, or is in the current dir
+	// here we assume that the plaintext file is given as a full path,
+	// or is in the current dir
 	if (n_bytes < 0) {
 		return NULL;
 	}
 	else if (n_bytes == 0) {
-		printf("Encryption is not supported for files (%s) with no contents.\n", filename);
+		printf("Encryption is not supported for files (%s) with "
+				"no contents.\n", filename);
 		return NULL;
 	}
 
@@ -264,9 +271,9 @@ FileContent* open_encrypted_file(char *base_path, char *archive, char *filename,
 	if (n_bytes < 0) {
 		return NULL;
 	} else if (n_bytes == 0) {
-		printf("The encrypted file %s has no contents; this is probably not what you were "
-				"expecting. This file may have been tampered with.\n",
-				filename);
+		printf("The encrypted file %s has no contents; this is probably "
+				"not what you were expecting. This file may have been "
+				"tampered with.\n", filename);
 		return NULL;
 	}
 
@@ -331,12 +338,20 @@ int write_ciphertext_to_file(char *base_path, char *archive,
 
 	// write the concatinated content to file at full file path
 	int error;
-	if ((error = write_content_to_file(file_path, content, total_bytes, "wb"))) {
-		printf("Could not write ciphertext to file.\n");
+	if ((error = write_content_to_file(file_path, content, total_bytes, "wbx"))) {
+		if (error == -2) {
+			// -2 returned when it is likely that the file already exists.
+			printf("Does the file %s already exist in the archive %s? If so, "
+					"please make sure to delete the file first, as you are not "
+					"allowed to overwrite encrypted files.\n",
+					fcontent->filename, archive);
+		} else {
+			printf("Couldn't write encrpyted content to file for "
+					"%s\n", fcontent->filename);
+		}
 		free(file_path);
 		return -1;
 	}
-
 	free(file_path);
 	return 0;
 }
@@ -574,15 +589,20 @@ int extract_file_content(char *file_path, BYTE **content) {
  * 		     	   content to write to the file
  * @param n_bytes, the number of BYTEs of content to write to the file
  * @param write_mode, the mode to open/write to the file with
- * @return 0 if write is successful, -1 if an error occurred
+ * @return 0 if write is successful, -1 if an error occurred or -2 if it is
+ * 		   possible that the file already exists
  */
 int write_content_to_file(char *file_path, BYTE *content, size_t n_bytes,
 		char *write_mode) {
 
 	FILE *fp = fopen(file_path, write_mode);
 	if (!fp) {
-		printf("Unable to create file: %s\n", file_path);
-		return -1;   // couldn't create file
+		printf("Couldn't open and write content to file here: %s\n", file_path);
+
+		// when we use "x" in the write mode, it checks to see if the file already exists
+		// hence, the interpretation of a null file pointer is different in this scenario
+		if (write_mode[strlen(write_mode) - 1] == 'x') return -2;
+		else return -1;
 	}
 
 	for (int i = 0; i < n_bytes; i++) {

@@ -84,7 +84,9 @@ int cstore_add(Request *request) {
 	if (!archive_exists(ARCHIVE_DIR, request->archive)) {
 		printf("Archive %s does not yet exist, so creating it...\n",
 				request->archive);
-		create_archive_folder(ARCHIVE_DIR, request->archive);
+		if ((error = create_archive_folder(ARCHIVE_DIR, request->archive))) {
+			return -1;
+		}
 	}
 
 	if (!(key = convert_password_to_cryptographic_key(request->password,
@@ -123,8 +125,6 @@ int cstore_add(Request *request) {
 
 		if ((error = write_ciphertext_to_file(ARCHIVE_DIR, request->archive, fc,
 		AES_BLOCK_SIZE, SHA256_BLOCK_SIZE))) {
-			printf("Couldn't write encrpyted content to file "
-					"for %s\n", fc->filename);
 			free_file_content(fc);
 			continue;
 		}

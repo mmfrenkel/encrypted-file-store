@@ -28,7 +28,7 @@ bool archive_exists(char *archive_base_path, char *archive_name);
 
 int list_archive_files(char *archive_base_path, char *archive_name);
 
-char* create_archive_folder(char *arch_base_path, char *archive_name);
+int create_archive_folder(char *arch_base_path, char *archive_name);
 
 FileContent* open_plaintext_file(char *filename);
 
