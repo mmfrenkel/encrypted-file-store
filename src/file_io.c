@@ -227,7 +227,7 @@ char* concat_archive_filenames(char *archive_base_path, char *archive_name) {
 			idx += len_filename;
 		}
 	}
-	// add null terminator to end
+	closedir(dir);
 	filenames[t_length_filenames] = '\0';
 
 	// clean-up
@@ -532,7 +532,9 @@ int write_metadata_file(char *base_path, char *archive, BYTE metadata[],
 		return -1;
 	}
 
-	return write_content_to_file(file_path, metadata, len_metadata, "wb");
+	int result = write_content_to_file(file_path, metadata, len_metadata, "wb");
+	free(file_path);
+	return result;
 }
 
 /**
