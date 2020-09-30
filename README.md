@@ -157,18 +157,18 @@ There is additionally a script that runs several of these commands in sequence, 
 
 ```
 $ make all
-$ ./test_cstore.sh
+$ ./bin/test_cstore.sh
 ```
 
 ### II. Libaries Used
 
 This project utilizes several standard C libraries. Here are some quick notes on their use and some reasons why they were included:
-* `stdlib.h` -- Allows memory allocation/deallocation.
-* `string.h` -- Allows for string comparisons, determining string length (helpful for parsing command line arguments and sending request to the correct functions).
-* `stdio.h` -- Helpful for interactions with user, via the command line for example, and/or printing out/logging information.
-* `termios.h` -- Allows a user to submit their password on the command line without echo (i.e., the password typed is not visible). Although getpass() was attempted, header files couldn't be found properly on Linux box. Termios allows for an alternative approach.
-* `unistd.h` -- Required, in combination with `terminos.h`, to allow for hidden password submission.
-* `stdbool.h` -- Makes code more readable by allowing the use of `true` and `false` instead of 1 and 0.
+* `stdlib.h`: Allows memory allocation/deallocation.
+* `string.h`: Allows for string comparisons, determining string length (helpful for parsing command line arguments and sending request to the correct functions).
+* `stdio.h`: Helpful for interactions with user, via the command line for example, and/or printing out/logging information.
+* `termios.h`: Allows a user to submit their password on the command line without echo (i.e., the password typed is not visible). Although getpass() was attempted, header files couldn't be found properly on Linux box. Termios allows for an alternative approach.
+* `unistd.h`: Required, in combination with `terminos.h`, to allow for hidden password submission.
+* `stdbool.h`: Makes code more readable by allowing the use of `true` and `false` instead of 1 and 0.
 
 ### III. Other
 
@@ -180,6 +180,7 @@ $ sudo apt install build-essential
 ```
 
 Additionally, `gdb` and `valgrind` were installed and used for debugging and to check for memory leaks, respectively:
+
 ```
 $ sudo apt install gdb
 $ sudo apt install valgrind
@@ -187,4 +188,4 @@ $ sudo apt install valgrind
 
 ## Credits
 
-This project was created as part of the Security I (COMS W4181) course at Columbia University in Fall 2020 with Dr. Steven Bellovin. This project makes use of basic cryptographic algorithms written by Brad Conte and found on github here: https://github.com/B-Con/crypto-algorithms. Selected code from this repository was moved to `/encryption-algorithms`.
+This project was created as part of the Security I (COMS W4181) course at Columbia University in Fall 2020 with Dr. Steven Bellovin. This project makes use of basic cryptographic algorithms written by Brad Conte which can be found on github here: https://github.com/B-Con/crypto-algorithms. Selected code from this repository was moved to `/encryption-algorithms`.
