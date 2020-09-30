@@ -41,6 +41,7 @@ int main(int argc, char *argv[]) {
 	// ------------------- Get Cryptographic Key --------------------//
 
 	if (!(key = create_cryptographic_key(request->password, PW_CRYPT_ITER))) {
+		free(request);
 		exit(1);
 	}
 
@@ -51,16 +52,19 @@ int main(int argc, char *argv[]) {
 		if (strncmp(ADD, request->subcommand, strlen(ADD)) != 0) {
 			alert_no_archive(request->archive);
 			free_request(request);
+			free(key);
 			return 0;
 		}
 		if ((error = create_archive_dir(ARCHIVE_DIR, request->archive))) {
 			free_request(request);
+			free(key);
 			exit(1);
 		}
 
 	} else {
 		if (!(archive_integrity_maintained(request->archive, key))) {
 			free_request(request);
+			free(key);
 			exit(0);
 		}
 	}
@@ -390,12 +394,12 @@ int cstore_extract(Request *request, BYTE *key) {
 			continue;
 		}
 
-		printf("Decrypted \"%s\" from archive \"%s\"", fc->filename,
+		printf("Decrypted \"%s\" from archive \"%s", fc->filename,
 				request->archive);
 		if (is_compromised)
-			printf(", but remember, it has been compromised... :(\n");
+			printf("\", but remember, it has been compromised... :(\n");
 		else
-			printf(".\n");
+			printf(".\"\n");
 
 		free_file_content(fc);
 	}
