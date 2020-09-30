@@ -376,8 +376,11 @@ int cstore_extract(Request *request, BYTE *key) {
 		if ((is_compromised = integrity_check(fc, key))) {
 			printf("\nINTEGRITY ALERT: Are you the owner of this archive? "
 					"Are you certain you submitted the correct password? "
-					"If so, the integrity of %s may have been compromised!\n\n",
+					"If so, the integrity of %s has been compromised! "
+					"Skipping extraction of this file...\n\n",
 					fc->filename);
+			free_file_content(fc);
+			continue;
 		}
 
 		if ((error = write_plaintext_to_file(fc))) {

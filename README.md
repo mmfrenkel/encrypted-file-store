@@ -11,12 +11,12 @@ $ cd ~/encrypted_filestore_archive
 ```
 ### I. Add
 
-If a user wants to encrypt a new file (e.g., `apple.txt`) into an archive (e.g., `fruits`) they could issue the following command, providing their password within the command using the `-p` flag:
+If a user wants to encrypt a new file (e.g., `apple.txt`) into an archive (e.g., `fruits`) they could issue the following command, providing their password within the command using the `-p` flag. Note that passwords should not be longer 20 characters:
 
 ```
 $ ./bin/cstore add -p <password> fruits apple.txt
 ```
-If the archive doesn't exist already, it will be created. Any action that the user would like to take following the initial creation of the archive will require that they submit the same original password; otherwise, they will get an integrity alert that their password is incorrect. Additionally, you cannot add a file to an archive if there is already a file in the archive of the same name; this is to prevent users from accidentally overriding a file they forgot that they encrypted.
+If the archive doesn't exist already, it will be created, along with a `.metadata` file within that archive. Any action that the user would like to take following the initial creation of the archive will require that they submit the same original password; otherwise, they will get an integrity alert that their password is incorrect. Additionally, you cannot add a file to an archive if there is already a file in the archive of the same name; this is to prevent users from accidentally overriding a file they forgot that they encrypted.
 
 Note that the program accepts multiple files at a time, so you can encrypt multiple files with a single command:
 
@@ -85,15 +85,15 @@ HMAC expressed in an equation: `HMAC(ct, k) = H(opad XOR k || (H(ipad XOR k || c
 
 HMAC are utilized in three distinct ways:
 
-a. Verifying a user's identity
+#### a. Verifying a user's identity
 
 When a new archive is created, an HMAC is generated from the archive's name using the password-derived cryptographic key, using the algorithm above. This HMAC is sent to the `.metadata` file for the archive, such that it can be re-read from the `.metadata` file each time a user attempts to add, extract or delete files from that archive in the future. This means that only users that have the password that was used in the creation of the archive can make edits to the archive (they may still list the file). Users with the wrong password will get an integrity alert, asking for a different password.
 
-b. Verifying the structure of an archive (i.e., filenames)
+#### b. Verifying the structure of an archive (i.e., filenames)
 
 In the course of an archive's lifetime, it is possible that an adversary renames or deletes a file in the archive, or even adds a foreign file to the archive. In order to be able to alert archive users of such corruption, each time a file is added or deleted from an archive, a HMAC is generated from concatination of the names of all the encrypted files in the archive. This HMAC is added to the archive's `.metadata` file. The means that each time a user attempts to interact with an archive, this filename-based HMAC can be regenerated and compared to the HMAC stored in the `.metadata` file. If the two HMACs do not match, users are alerted that the archive is corrupted.
 
-c. Verifying the content of an individual encrypted file
+#### c. Verifying the content of an individual encrypted file
 
 In order to make sure that the content of an individual encrypted file is not corrupted or tampered with, an HMAC generated using the cryptographic key and ciphertext for each file. Each HMAC is appended to the ciphertext and stored in the encrypted file (ct || HMAC). This means that when a person attempts to extract their encrypted file from the archive, an integrity check can be made by comparing the initial HMAC assigned to an encrypted file (which is read in from the file on decryption) with the HMAC that is recomputed from ciphertext read in from the file store and password-derived cryptographic key. The integrity check fails if the two HMAC hashes do not match. This can be achieved if either (a) a user submits the wrong password or (b) a file has been corrupted in storage. Users are warned of possible integrity violations as part of the program. Additionally, given that the HMAC is reliant on a user's submitted password, this HMAC is used similarly for determining whether a user is allowed to delete a file from the file store. 
 

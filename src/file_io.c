@@ -372,9 +372,8 @@ FileContent* open_encrypted_file(char *base_path, char *archive, char *filename,
 	if (n_bytes < 0) {
 		return NULL;  // this is an error
 	} else if (n_bytes == 0) {
-		printf("The encrypted file %s has no contents; this is probably "
-				"not what you were expecting. This file may have been "
-				"tampered with.\n", filename);
+		printf("The encrypted file %s unexpectedly has no contents; this "
+				"file may have been tampered with.\n", filename);
 		return NULL;
 	}
 
