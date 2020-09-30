@@ -31,7 +31,6 @@ int main(int argc, char *argv[]) {
 	if (!(request = parse_request(argc, argv))) {
 		exit(1);
 	}
-
 	// request to list files is not protected, we can simply run it
 	if (strncmp(LIST, request->subcommand, strlen(LIST)) == 0) {
 		error = cstore_list(request);
@@ -49,11 +48,7 @@ int main(int argc, char *argv[]) {
 
 	if (!archive_exists(ARCHIVE_DIR, request->archive)) {
 
-		printf("The archive doesn't exist.\n");
-
 		if (strncmp(ADD, request->subcommand, strlen(ADD)) != 0) {
-			printf("Trying to exit.\n");
-
 			alert_no_archive(request->archive);
 			free_request(request);
 			return 0;
@@ -174,8 +169,14 @@ int archive_integrity_maintained(char *archive, BYTE *key) {
 }
 
 /**
- * Checks that the integrity of the archive has been maintained
- * through three steps.
+ * Updates an archive's metadata. Metadata files in archives
+ * contain two critical items for authentication and integrity
+ * checking:
+ *
+ * (1) HMAC hash based on a hash of the archive's name,
+ *     using the cryptographic key
+ * (2) HMAC hash based on a hash of a concatination of all the filenames
+ *     in the archive, using the cryptographic key
  *
  * @param archive, the name of the archive
  * @param key, crytographic key derived from the user's password
@@ -246,7 +247,8 @@ int cstore_list(Request *request) {
  * archive within the encrypted filestore. The Request must have
  * the archive name, user password, number of files, and file
  * names specified. If any issues are encountered with submitted files,
- * other files are attempted before the program ends.
+ * other files are attempted before the program ends. If encryption
+ * is succesful, plaintext files would be deleted.
  *
  * @param request, Request struct containing information about
  * 				   a user's submitted request for encryption.

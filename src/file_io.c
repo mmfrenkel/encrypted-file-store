@@ -106,7 +106,9 @@ bool archive_exists(char *archive_base_path, char *archive_name) {
 }
 
 /**
- * Prints out all filenames in a specified archive.
+ * Prints out all filenames in a specified archive. This will skip
+ * the following files: '.', '..' and the name of the metadata file
+ * for archives.
  *
  * @param archive_base_path, the base path for where ALL archives are
  * 							 stored within a user's file system
@@ -236,13 +238,12 @@ char* concat_archive_filenames(char *archive_base_path, char *archive_name) {
 /**
  * Creates a new directory for a new archive within the archive "base"
  * folder, where all archives can be accessed. It also creates an
- * empty metadata file, which eventually will hold the contents
- * that enable integrity checking of the archive.
+ * empty metadata file within the new directory, which eventually will
+ * hold the contents that enable integrity checking of the archive.
  *
  * @param base_path, the base path for where ALL archives are
  * 					 stored within a user's file system
  * @param archive, the name of the archive
- * @param hmac_auth, a unique authenicate code for the user/archive
  * @returns 1 if creation of archive folder was successful else -1
  */
 int create_archive_dir(char *base_path, char *archive) {
@@ -426,6 +427,7 @@ int open_archive_metadata(char *base_path, char *archive, BYTE **content) {
  *
  * @param fcontent, FileContent containing the parsed components of the
  * 					plaintext file.
+ * @return 0 if success, -1 if failure
  */
 int write_plaintext_to_file(FileContent *fcontent) {
 	return write_content_to_file(fcontent->filename, fcontent->plaintext,
