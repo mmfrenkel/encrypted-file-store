@@ -4,7 +4,7 @@ This encrypted file store system allows users to submit files for encryption and
 
 ## Use
 
-This file store has four main commands: `add`, `extract`, `delete` and `list`, each of which will be explained below. This program puts ALL archives within an `encrypted_filestore_archive` directory, which is created in the users home directory on building the project. All files are stored within this base directory and extracted back into the current directory. To see the encrypted filestore location:
+This file store has four main commands: `add`, `extract`, `delete` and `list`, each of which will be explained below. This program puts ALL archives within an `encrypted_filestore_archive` directory, which is created in the users home directory upon building the project. All files are stored within this base directory and extracted back into the current directory. To see the encrypted filestore location:
 
 ```
 $ cd ~/encrypted_filestore_archive
@@ -16,7 +16,7 @@ If a user wants to encrypt a new file (e.g., `apple.txt`) into an archive (e.g.,
 ```
 $ ./bin/cstore add -p <password> fruits apple.txt
 ```
-If the archive doesn't exist already, it will be created, along with a `.metadata` file within that archive. Any action that the user would like to take following the initial creation of the archive will require that they submit the same original password; otherwise, they will get an integrity alert that their password is incorrect. Additionally, you cannot add a file to an archive if there is already a file in the archive of the same name; this is to prevent users from accidentally overriding a file they forgot that they encrypted.
+If the archive doesn't exist already, it will be created, along with a `.metadata` file within that archive. Any action that the user would like to take following the initial creation of the archive will require that they submit the same original password; otherwise, they will get an integrity alert that their password is incorrect. Additionally, you cannot add a file to an archive if there is already a file in the archive of the same name; this is to prevent users from accidentally overriding a file they forgot that they encrypted and makes their intention explicit.
 
 Note that the program accepts multiple files at a time, so you can encrypt multiple files with a single command:
 
@@ -36,16 +36,16 @@ Once a file is successfully added to an archive, it is easy to extract the file 
 ```
 $ ./bin/cstore extract -p <password> fruits apple.txt bananas.txt
 ```
-This will extract the file from the encrypted file store into the current directory, however it will not delete it from the encrypted file store. Upon extracting the file from the file store, the program will perform an integrity check to alert users if their file may have been corrupted or tampered with. It is important for users to get their password correct, or else the decryption of the file will not be successful (they will end up with a file that looks like jibberish!). 
+This will extract the file from the encrypted file store into the current directory, however it will not delete it from the encrypted file store. Upon extracting the file from the file store, the program will perform an integrity check to alert users if their file may have been corrupted or tampered with. It is important for users to get their password correct, or else the decryption of the file will not be successful. 
 
 ### III. Delete
 
-In order to  delete the document from the archive:
+In order to  delete the document from the archive,:
 
 ```
 $ ./bin/cstore delete -p <password> fruits apple.txt bananas.txt
 ```
-Files are only deleted from an archive if users can be authenticated. If the user passes the wrong password, they will be unable to delete their file from the archive. 
+Files are only deleted from an archive if users can be authenticated. If the user passes a wrong password, they will be unable to delete files from the archive until they get it right. 
 
 ### IV. List
 
@@ -59,43 +59,43 @@ Note that a password is not required for this functionality.
 
 ## Design
 
-In order to perform the central encryption/decryption functions of an encrypted file archive, this project utiltizes the several encryption functions. The original source code for these functions was created by Brad Conte and found at https://github.com/B-Con/crypto-algorithms. For this project, the code lives in a separate directory (`/encryption-algorithsm`) from the `src` code written as part of this project.
+In order to perform the central encryption/decryption and integrity-checking functions of an encrypted file archive, this project utiltizes the several encryption/hashing functions. The original source code for these functions was created by Brad Conte and found at https://github.com/B-Con/crypto-algorithms. For this project, the code lives in a separate directory (`/encryption-algorithsm`) from the `src` code written as part of this project.
 
-This encrypted filestore utilizes integrity checking at the archive level and the file level. Read more below.
+This encrypted filestore utilizes integrity checking at both the archive level and the file level. Read more below.
 
 ### I. Generation of Cryptographic Key
 
-The cryptographic key used in the AES encryption and HMAC hashing steps described below is derived from the user-provided password. Upon submission, the user's password is iteratively hashed 10,000 times using SHA-256. 
+The cryptographic key used in the AES encryption and HMAC hashing steps described below is derived from the user-provided password. Upon submission, the user's password is iteratively hashed 10,000 times using SHA-256 hashing. 
 
 ### I. AES CBC Encryption
 
-In order to encrypt and decrypt files, this project makes use of the Advanced Encryption Standard (AES). AES is a block cipher, taking 16 bytes (128 bits) at a time to produce 16 bytes of ciphertext. Here, cipher block chaining (CBC) mode was used to encrypt the entire plaintext content of a file, block by block, with each plaintext block exclusive-ORed with the previous ciphertext block before encryption. This approach is advantageous because it allows two identifical plaintext blocks to be encrypted differently and thus avoids the dreaded Linux Penguin effect of modes like the electronic code book (ECB) mode. 
+In order to encrypt and decrypt files, this project makes use of the Advanced Encryption Standard (AES). AES is a block cipher, taking 16 bytes at a time to produce 16 bytes of ciphertext. Here, cipher block chaining (CBC) mode was used to encrypt the entire plaintext content of a file block by block, with each plaintext block exclusive-ORed (XOR'd) with the previous ciphertext block before encryption. This approach is advantageous because it allows two identifical plaintext blocks to be encrypted differently and thus avoids the dreaded Linux Penguin effect of encryption modes like the electronic code book (ECB) mode. 
 
-The CBC approach requires an initialization vector (IV), an extra block of truly random text, to XOR with the first block of plaintext to produce the first ciphertext block. In this project, a unique IV is generated for each submitted file using `/dev/urandom`. Because the same IV is required for decryption, the unique IV for each file is prepended to the ciphertext and stored in the encrypted file (i.e., IV || ciphertext).
+The CBC approach requires an initialization vector (IV), an extra block of truly random text, to XOR with the first block of plaintext to produce the first ciphertext block. In this project, a unique IV is generated for each submitted file using `/dev/urandom`. Because the same IV is required for decryption, the unique IV for each file is prepended to the ciphertext and stored in the encrypted file (i.e., IV || ciphertext) within the archive.
 
 ### II. Integrity Check with Hash-Based Authentication Code (HMAC)
 
-Hash-based authentication codes (HMAC) are used several times as part of this project as a means of authentication and integrity checking. Here, HMAC hashes are determined for using the cryptographic key derived from a user's password (`k`) and text (`ct`). For this project, the algorithm for calculating the HMAC includes three distinct steps:
+Hash-based authentication codes (HMAC) are used several times as part of this project as a means of authentication and integrity checking. Here, HMACs were created using the cryptographic key derived from a user's password (`k`) and a set of text (`t`). For this project, the algorithm for calculating the HMAC includes three distinct steps:
 
-(1) Derive two keys from the provided key, `k`. These are created by XORing `k` with "magic numbers," `0x5c` (`opad`) and `0x36` (`ipad`) to produce an `opad_key` and `ipad_key`.
-(2) Find the SHA-256 hash of a concatination (`||`) of the first derived key (`opad_key`) and the ciphertext, `ct`.
+(1) Derive two keys from the cryptographic key, `k`. These are created by XORing `k` with "magic numbers," `0x5c` (`opad`) and `0x36` (`ipad`) to produce an `opad_key` and `ipad_key`.
+(2) Find the SHA-256 hash of a concatination (`||`) of the first derived key (`opad_key`) and the text, `t`.
 (3) Find the SHA-256 hash of a concatination of the first hash from step (2) and the second derived key (`ipad_key`).
  
-HMAC expressed in an equation: `HMAC(ct, k) = H(opad XOR k || (H(ipad XOR k || ct))`
+Here is HMAC expressed as an equation: `HMAC(ct, k) = H(opad XOR k || (H(ipad XOR k || t))`
 
-HMAC are utilized in three distinct ways:
+HMACs are utilized in three distinct ways:
 
 #### a. Verifying a user's identity
 
-When a new archive is created, an HMAC is generated from the archive's name using the password-derived cryptographic key, using the algorithm above. This HMAC is sent to the `.metadata` file for the archive, such that it can be re-read from the `.metadata` file each time a user attempts to add, extract or delete files from that archive in the future. This means that only users that have the password that was used in the creation of the archive can make edits to the archive (they may still list the file). Users with the wrong password will get an integrity alert, asking for a different password.
+When a new archive is created, an HMAC is generated using the new archive's name as `t` and the password-derived cryptographic key, `k`. This HMAC is sent to the `.metadata` file for the archive, such that it can be re-read from the `.metadata` file from that archive in the future and compared against the HMAC created from the password submitted each time a user attempts to add, extract or delete files. This means that only users that know the password that was used in the initial creation of the archive can make edits to the archive (though anyone may still list the files). Users with the incorrect passwords will get an integrity alert, asking for a different password.
 
 #### b. Verifying the structure of an archive (i.e., filenames)
 
-In the course of an archive's lifetime, it is possible that an adversary renames or deletes a file in the archive, or even adds a foreign file to the archive. In order to be able to alert archive users of such corruption, each time a file is added or deleted from an archive, a HMAC is generated from concatination of the names of all the encrypted files in the archive. This HMAC is added to the archive's `.metadata` file. The means that each time a user attempts to interact with an archive, this filename-based HMAC can be regenerated and compared to the HMAC stored in the `.metadata` file. If the two HMACs do not match, users are alerted that the archive is corrupted.
+In the course of an archive's lifetime, it is possible that an adversary renames or deletes a file in the archive, or even adds a foreign file to the archive. In order to be able to alert archive users of such corruption, each time a file is added or deleted from an archive, a HMAC is generated using a concatination of the names of all the encrypted files in the archive as `t` and the crytographic key. This HMAC is added to the archive's `.metadata` file. The means that each time a user attempts to interact with an archive, this filename-based HMAC can be regenerated and compared to the HMAC stored in the `.metadata` file. If the two HMACs do not match, users are alerted that the archive has an integrity violation.
 
 #### c. Verifying the content of an individual encrypted file
 
-In order to make sure that the content of an individual encrypted file is not corrupted or tampered with, an HMAC generated using the cryptographic key and ciphertext for each file. Each HMAC is appended to the ciphertext and stored in the encrypted file (ct || HMAC). This means that when a person attempts to extract their encrypted file from the archive, an integrity check can be made by comparing the initial HMAC assigned to an encrypted file (which is read in from the file on decryption) with the HMAC that is recomputed from ciphertext read in from the file store and password-derived cryptographic key. The integrity check fails if the two HMAC hashes do not match. This can be achieved if either (a) a user submits the wrong password or (b) a file has been corrupted in storage. Users are warned of possible integrity violations as part of the program. Additionally, given that the HMAC is reliant on a user's submitted password, this HMAC is used similarly for determining whether a user is allowed to delete a file from the file store. 
+In order to make sure that the actual content of an individual encrypted file itself is not corrupted or tampered with, an HMAC generated for each file using the file's ciphertext as `t` and the cryptographic key. This HMAC is appended to the ciphertext and stored in the encrypted file (ct || HMAC). This means that when a person attempts to extract their encrypted file from the archive, an integrity check can be made by comparing the initial HMAC assigned to an encrypted file (which is read in from the file on decryption) with the HMAC that is recomputed from ciphertext read in from the file store and password-derived cryptographic key. The integrity check fails if the two HMAC hashes do not match. Since users must have submitted the correct password in order to make it to the extraction step (see `a.`), this integrity check fails when a file has been corrupted in storage. Users are alerted of any such integrity violation.  
 
 ### III. The "TLDR"
 
@@ -121,19 +121,20 @@ This will clean and compile the code, creating a new executable `./bin/cstore` t
 ```
 $ ~/encrypted_filestore_archive
 ```
-If you'd like to actually install the project (i.e., not just build the executable but also move it to your path) then run:
+If you are using a Linux OS and you'd like to actually install the project (i.e., not just build the executable, but also move it to your path) then run:
 
 ```
 $ sudo make install
 ```
-This nicely allows a user to issue `cstore` instead of `./bin/cstore` to run the program. Note, however, that this command assumes that `/usr/local/bin` is on your system `PATH` and that binaries can be moved to it; hence, this command is only recommended if running this program on a Linux OS. Additionally, the downside is that you'll need to continue using `sudo` for any Makefile command (i.e., `sudo make all`), otherwise you'll get a permissions error. If you install and later decide that it isn't for you:
+This nicely allows a user to issue `cstore` instead of `./bin/cstore` to run the program. Note, however, that this command assumes that `/usr/local/bin` is on your system `PATH` and that binaries can be moved to it; hence, this command is only recommended if running this program on a Linux OS. Additionally, the downside is that you'll need to continue using `sudo` for any Makefile command (i.e., `sudo make all`), otherwise you'll likely get a permissions error. If you install and later decide that it isn't for you:
 
 ```
 $ sudo make uninstall
 ```
+
 #### b. Testing Program 
 
-There are two sets of tests for this program: (1) unit tests and (2) a bash script that runs various iterations of possible user commands. While the unit tests ensure that the encryption steps are functioning properly, the bash script tests are mostly to confirm that the program can handle various scenarios of user inputs with grace and without throwing any errors.
+There are two sets of tests for this program: (1) unit tests and (2) several bash scripts that run various iterations of possible user commands. While the unit tests ensure that the encryption steps are functioning properly, the bash script tests are mostly to confirm that the program can handle various scenarios of user inputs with grace and without throwing any errors and serve as a demo of project functionality.
 
 Unit tests can be compiled into a new executable and run via the following sequence of commands:
 
@@ -141,11 +142,22 @@ Unit tests can be compiled into a new executable and run via the following seque
 $ make test
 $ ./bin/test_cstore
 ```
-The bash script should be run after cleaning and compiling the main executable:
+The bash scripts should be run after cleaning and compiling the main executable. To see a demonstration of functionality, run the following `.sh` scripts in the following order (not running these commands successfully in order may have unexpected results):
 
 ```
 $ make all
-$ ./bin/test_cstore.sh
+$ ./bin/cstore_add.sh
+$ ./bin/cstore_extract.sh
+$ ./bin/cstore_extract_wrong_pass.sh
+$ ./bin/cstore_list.sh
+$ ./bin/cstore_delete.sh
+```
+
+There is additionally a script that runs several of these commands in sequence, testing that the program is resilient to various attempts and errors in user input:
+
+```
+$ make all
+$ ./test_cstore.sh
 ```
 
 ### II. Libaries Used
