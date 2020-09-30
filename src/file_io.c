@@ -86,7 +86,7 @@ bool archive_exists(char *archive_base_path, char *archive_name) {
 	DIR *dir = opendir(archive_dir);
 	if (!dir) {
 		printf("Could not find the base archive location %s; run "
-				"'make base_archive' to create it before continuing to use"
+				"'make base_archive' to create it before continuing to use "
 				"this encrypted filestore.\n",
 				archive_dir);
 		exit(1);
@@ -208,7 +208,6 @@ char* concat_archive_filenames(char *archive_base_path, char *archive_name) {
 	closedir(dir);
 
 	// --------- Now repeat, but add names into array ------- //
-	dir = opendir(archive_dir);
 
 	char *filenames = (char*) malloc(sizeof(char) * (t_length_filenames + 1));
 	if (!filenames) {
