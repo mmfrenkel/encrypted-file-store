@@ -114,6 +114,12 @@ void free_request(Request *request) {
  */
 Request* parse_request(int argc, char *argv[]) {
 
+	// there should be at least 3 args
+	if (argc < 3) {
+		print_subcommand_options();
+		return NULL;
+	}
+
 	Request *request = init_request();
 	char *subcommand;
 
@@ -465,8 +471,8 @@ int count_files_submitted(int argc, char *argv[]) {
  * using the filestore.
  */
 void print_subcommand_options(){
-	printf("Valid subcommand is required to continue.\n\n"
-			"Please specify one of the following subcommands:\n"
+	printf("A valid subcommand and archive is required to continue.\n\n"
+			"Please see the available subcommands and their formats below:\n"
 			"* list <archive>: List all files in specified archive\n"
 			"* add [-p password] <archive> <filename>: Add a file at <filename> to archive\n"
 			"* extract [-p password] <archive> <filename>: Extract a file in a specified archive\n"
