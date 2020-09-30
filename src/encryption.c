@@ -46,12 +46,14 @@ BYTE* get_random(size_t n_bytes);
  * @param iterations, the number of iterations of SHA-256 to perform
  * @return the new cryptographic key
  */
-BYTE* convert_password_to_cryptographic_key(char *pt_password, int iterations) {
+BYTE* create_cryptographic_key(char *pt_password, int iterations) {
+
 	BYTE *new_hash;
 	BYTE *temp;
 
 	// make this temporary memory allocation, as to not delete original pw
 	int len_pt_pw = strlen(pt_password);
+
 	temp = (BYTE*) malloc(sizeof(unsigned char) * (len_pt_pw + 1));
 	if (!temp) {
 		printf("Failed to allocate memory for temporary hash storage.\n ");
@@ -63,7 +65,7 @@ BYTE* convert_password_to_cryptographic_key(char *pt_password, int iterations) {
 	for (int i = 0; i < iterations; i++) {
 		if (!(new_hash = hash_sha_256(temp, len_pt_pw))) {
 			printf("Unable to create cryptographic key from "
-					"submitted password\n");
+					"submitted password.\n");
 			free(temp);
 			return NULL;
 		}
@@ -327,7 +329,7 @@ BYTE* create_padded_plaintext(BYTE *pt, int len_pt, int block_size) {
 
 /**
  * Computes a hash-based message authenticate code (HMAC) for the a
- * plaintext file uses the calculated ciphertext and the cryptographic key
+ * plaintext file using the calculated ciphertext and the cryptographic key
  * derived from the user's initial password. This HMAC utilizes the
  * SHA-256 hash function from  Brad Conto, found here:
  * https://github.com/B-Con/crypto-algorithms.
@@ -339,7 +341,7 @@ BYTE* create_padded_plaintext(BYTE *pt, int len_pt, int block_size) {
  * @param key, the cryptographic key derived from a user's password
  * @return 0 if HMAC-SHA256 hash was performed successfully, -1 if error
  */
-int assign_hmac_256(FileContent *fcontent, BYTE *key) {
+int assign_ciphertext_hmac_256(FileContent *fcontent, BYTE *key) {
 
 	if (!fcontent->ciphertext) {
 		printf("Ciphertext is necessary to generate an HMAC hash. "
@@ -357,6 +359,80 @@ int assign_hmac_256(FileContent *fcontent, BYTE *key) {
 
 	fcontent->hmac_hash = hmac_hash;
 	return 0;
+}
+
+/**
+ * Computes a hash-based message authenticate code (HMAC) for a
+ * given combination of archive name and cryptographic key
+ * derived from the user's initial password. By comparing the
+ * resulting HMAC hash to the HMAC hash stored in the archive
+ * metadata, it is possible to tell whether a user
+ * has the capability of interacting with a specific archive
+ * (i.e., did the submit the correct password?).
+ *
+ * Recall: Metadata for achives is a concatination of two HMAC
+ * hashes where the first is for user authentication.
+ *
+ * @param archive, the name of the archive
+ * @param key, the cryptographic key derived from a user's password
+ * @param metadata, a pointer to BYTES read in from metadata file
+ * @return 0 if the user could be authenticated, else 1 for incorrect
+ *           user or -1 for error
+ */
+int authenticate_user_for_archive(char *archive, BYTE *key, BYTE *metadata) {
+
+	BYTE *hmac_hash = compute_hmac_256(key, (unsigned char*) archive,
+			strlen(archive));
+
+	if (!hmac_hash) {
+		printf("Could not compute hmac for user/archive combination.\n");
+		return -1;
+	}
+
+	// compare the hmac hash generated with archive name and cryptrographic
+	// key with the one stored in the archive's metadata file
+	int invalid =  memcmp(hmac_hash, metadata, SHA256_BLOCK_SIZE) ? 1 : 0;
+
+	free(hmac_hash); // clean up
+	return invalid;
+}
+
+/**
+ * Computes a hash-based message authenticate code (HMAC) for a
+ * given combination of filenames (as a single concatinated string)
+ * and the cryptographic key derived from the user's initial
+ * password submission. By comparing the resulting HMAC hash
+ * to the HMAC hash stored in the archive metadata, we can see
+ * if any of the files in the archive have been deleted or renamed
+ * or if any other files have been added.
+ *
+ * Recall: Each metadata file for achives is a concatination of two HMAC
+ * hashes, where the second hash is used for archive filename integrity.
+
+ * @param key, the cryptographic key derived from a user's password
+ * @param metadata, a pointer to BYTES read in from metadata file
+ * @param filenames, a array of concatinated filenames in the archive
+ * @return 0 if the user could be authenticated, else 1 for incorrect
+ *           user or -1 for error
+ */
+int verify_archive_contents(BYTE *key, BYTE *metadata, char *filenames) {
+
+	BYTE *hmac_hash = compute_hmac_256(key, (unsigned char*) filenames,
+			strlen(filenames));
+
+	if (!hmac_hash) {
+		printf("Could not compute hmac for user/archive combination.\n");
+		return -1;
+	}
+
+	// compare the hmac hash generated with filenames and cryptrographic
+	// key with the one stored in the archive's metadata file
+	// the metadata hash of interest is the second hmac hash in the content
+	int invalid =  memcmp(hmac_hash, &metadata[SHA256_BLOCK_SIZE],
+			SHA256_BLOCK_SIZE) ? 1 : 0;
+
+	free(hmac_hash); // clean up
+	return invalid;
 }
 
 /**

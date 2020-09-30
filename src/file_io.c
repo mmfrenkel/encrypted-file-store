@@ -35,9 +35,6 @@ FileContent* init_file_content_pt(char *filename, BYTE *content, size_t n_bytes)
 char* get_full_filepath_in_archive(char *base_path, char *archive,
 		char *filename);
 
-int write_content_to_file(char *file_path, BYTE *content, size_t n_bytes,
-		char *write_mode);
-
 int extract_file_content(char *file_path, BYTE **content);
 
 /* ------------------------------------------------------ */
@@ -89,7 +86,8 @@ bool archive_exists(char *archive_base_path, char *archive_name) {
 	DIR *dir = opendir(archive_dir);
 	if (!dir) {
 		printf("Could not find the base archive location %s; run "
-				"'make base_archive' to create it before continuing\n",
+				"'make base_archive' to create it before continuing to use"
+				"this encrypted filestore.\n",
 				archive_dir);
 		exit(1);
 	}
@@ -133,18 +131,20 @@ int list_archive_files(char *archive_base_path, char *archive_name) {
 	struct dirent *de;
 	DIR *dir = opendir(archive_dir);
 	if (!dir) {
-		printf("Could not find the base archive location %s; run 'make base_archive' "
-				"to create it before continuing\n", archive_dir);
+		printf("Could not find the archive \"%s.\" "
+				"Did you spell it correctly?\n", archive_name);
 		free(archive_dir);
 		return -1;
 	}
 
-	printf("Files currently encrypted within \"%s\":\n", archive_name);
+	printf("\nFiles currently encrypted within \"%s\"\n", archive_name);
+	printf("-------------------------------------------\n");
 	int count_files = 0;
 	while ((de = readdir(dir)) != NULL) {
 
 		// we don't need to see the . and .. content in dir
-		if (strcmp(".", de->d_name) && strcmp("..", de->d_name)) {
+		if (strcmp(".", de->d_name) && strcmp("..", de->d_name)
+				&& strcmp(METADATA_FILENAME, de->d_name)) {
 			printf(" *  %s\n", de->d_name);
 			count_files++;
 		}
@@ -162,31 +162,128 @@ int list_archive_files(char *archive_base_path, char *archive_name) {
 }
 
 /**
- * Creates a new directory for a new archive within the archive "base"
- * folder, where all archives can be accessed.
+ * Concatinates the names of all the files in the archive,
+ * as one long string. Memory is allocated to hold the str content.
+ * Note that '.' and '..' files are skipped.
  *
  * @param archive_base_path, the base path for where ALL archives are
  * 							 stored within a user's file system
  * @param archive_name, the name of the archive
- * @returns 1 if creation of archive folder was successful else -1
+ * @return a string representing concatination of all filenames
  */
-int create_archive_folder(char *arch_base_path, char *archive_name) {
+char* concat_archive_filenames(char *archive_base_path, char *archive_name) {
 
-	char *absolute_base_dir = get_absolute_path_archive(arch_base_path);
-	char *new_archive_dir = concat_path(absolute_base_dir, archive_name);
+	char *base_path;
+	if (!(base_path = get_absolute_path_archive(archive_base_path)))
+		return NULL;
 
-	int error = 0;
+	char *archive_dir = concat_path(base_path, archive_name);
+	free(base_path);  // no longer need this intermediate path
 
-	// 0700 so that only owners have the ability to read, write and execute
-	if ((error = mkdir(new_archive_dir, 0700))) {
-		printf("Failed to create the new archive. Please try again.\n");
+	if (!archive_dir)
+		return NULL;
+
+	// -------- CONCAT NAMES OF ALL FILES TOGETHER ---- //
+	struct dirent *de;
+
+	// -- first find the total length of all the file names -- //
+
+	DIR *dir = opendir(archive_dir);
+	if (!dir) {
+		printf("Could not open base archive location %s.\n", archive_dir);
+		free(archive_dir);
+		return NULL;
 	}
 
-	// clean up
+	int t_length_filenames = 0;
+	while ((de = readdir(dir)) != NULL) {
+
+		// we don't need to count the . and .. content in dir
+		if (strcmp(".", de->d_name) && strcmp("..", de->d_name)) {
+			t_length_filenames += strlen(de->d_name);
+		}
+	}
+	closedir(dir);
+
+	// --------- Now repeat, but add names into array ------- //
+	dir = opendir(archive_dir);
+
+	char *filenames = (char*) malloc(sizeof(char) * (t_length_filenames + 1));
+	if (!filenames) {
+		printf("Could not allocate memory for filenames\n");
+		return NULL;
+	}
+
+	// now add the file names into the malloc'd str
+	dir = opendir(archive_dir);
+	int idx = 0;
+	while ((de = readdir(dir)) != NULL) {
+
+		if (strcmp(".", de->d_name) && strcmp("..", de->d_name)) {
+			int len_filename = strlen(de->d_name);
+			memcpy(&filenames[idx], de->d_name, len_filename);
+			idx += len_filename;
+		}
+	}
+	// add null terminator to end
+	filenames[t_length_filenames] = '\0';
+
+	// clean-up
+	free(archive_dir);
+	return filenames;
+}
+
+/**
+ * Creates a new directory for a new archive within the archive "base"
+ * folder, where all archives can be accessed. It also creates an
+ * empty metadata file, which eventually will hold the contents
+ * that enable integrity checking of the archive.
+ *
+ * @param base_path, the base path for where ALL archives are
+ * 					 stored within a user's file system
+ * @param archive, the name of the archive
+ * @param hmac_auth, a unique authenicate code for the user/archive
+ * @returns 1 if creation of archive folder was successful else -1
+ */
+int create_archive_dir(char *base_path, char *archive) {
+
+	// ------------- Create new archive directory ---------- //
+	printf("Creating new archive \"%s\". Use your submitted password "
+			"to interact with this archive in the future.\n", archive);
+
+	char *absolute_base_dir = get_absolute_path_archive(base_path);
+	char *new_archive_dir = concat_path(absolute_base_dir, archive);
+
+	// 0700 so that only owners have the ability to read, write and execute
+	int error = mkdir(new_archive_dir, 0700);
 	free(absolute_base_dir);
 	free(new_archive_dir);
 
-	return error;
+	if (error) {
+		printf("Failed to create the new archive. Please try again.\n");
+		return -1;
+	}
+
+	// -------- Create the metadata file for directory ----- //
+
+	// get full path of where file should be
+	char *file_path;
+	if (!(file_path = get_full_filepath_in_archive(base_path, archive,
+			METADATA_FILENAME))) {
+		printf("Issue encountered creating the full file path for metadata.\n");
+		return -1;
+	}
+
+	// the file should be empty; it just needs to exist
+	FILE *fp = fopen(file_path, "w");
+	if (!fp) {
+		printf("Could not create a metafile file for new archive.\n");
+		return -1;
+	}
+
+	fclose(fp);
+	free(file_path);
+	return 0;
 }
 
 /**
@@ -215,16 +312,19 @@ FileContent* open_plaintext_file(char *filename) {
 	// here we assume that the plaintext file is given as a full path,
 	// or is in the current dir
 	if (n_bytes < 0) {
-		return NULL;
+		return NULL;  // this is an error
 	}
 	else if (n_bytes == 0) {
 		printf("Encryption is not supported for files (%s) with "
 				"no contents.\n", filename);
+		if (content)
+			free(content);
 		return NULL;
 	}
 
 	if (!(file_content = init_file_content_pt(filename, content, n_bytes))) {
 		printf("Could not create FileContent struct to contain data.\n");
+		free(content);
 		return NULL;
 	}
 	return file_content;
@@ -269,7 +369,7 @@ FileContent* open_encrypted_file(char *base_path, char *archive, char *filename,
 	BYTE *content = NULL;
 	int n_bytes = extract_file_content(file_path, &content);
 	if (n_bytes < 0) {
-		return NULL;
+		return NULL;  // this is an error
 	} else if (n_bytes == 0) {
 		printf("The encrypted file %s has no contents; this is probably "
 				"not what you were expecting. This file may have been "
@@ -283,6 +383,53 @@ FileContent* open_encrypted_file(char *base_path, char *archive, char *filename,
 	free(file_path);
 	free(content); // we no longer need this unparsed content; it's now in file_content
 	return fcontent;
+}
+
+/**
+ * Opens the metadata file for a given archive and extracts the
+ * information stored. This content includes two HMAC hashes:
+ * (1) A HMAC that can be used to authenticate a user with an archive
+ * (2) A HMAC that can be used to do an integrity check of the archive
+ *     contents.
+ *
+ * @param base_path, the base path for where ALL archives are
+ * 					 stored within a user's file system
+ * @param archive, the name of the archive
+ * @param content, a pointer to an array of BYTES
+ * @return pointer to malloc'd BYTES of metadata content
+ */
+int open_archive_metadata(char *base_path, char *archive, BYTE **content) {
+
+	// get full path of where file should be
+	char *file_path;
+	if (!(file_path = get_full_filepath_in_archive(base_path, archive,
+			METADATA_FILENAME))) {
+		printf("Issue encountered creating the full file path for metadata.\n");
+		return -1;
+	}
+
+	int n_bytes  = extract_file_content(file_path, content);
+	free(file_path);
+
+	if (n_bytes < 0) { // this means there was an error
+		printf("Unable to open metadata file for \"%s\".\n", archive);
+		return -1;
+	}
+	return n_bytes;
+}
+
+/**
+ * Writes plaintext content stored in a FileContent struct
+ * to a plaintext file in the current directory. In order to write
+ * the file, the plaintext bytes and the size of the file must not
+ * be NULL (other ciphertext information is not required).
+ *
+ * @param fcontent, FileContent containing the parsed components of the
+ * 					plaintext file.
+ */
+int write_plaintext_to_file(FileContent *fcontent) {
+	return write_content_to_file(fcontent->filename, fcontent->plaintext,
+			fcontent->n_plaintext_bytes, "w");
 }
 
 /**
@@ -316,15 +463,19 @@ FileContent* open_encrypted_file(char *base_path, char *archive, char *filename,
 int write_ciphertext_to_file(char *base_path, char *archive,
 		FileContent *fcontent, size_t len_iv, size_t len_hmac_hash) {
 
+	if (!strcmp(fcontent->filename, METADATA_FILENAME)) {
+		printf("Please rename \"%s\"; it currently has the same name "
+				"as the metadata file for this archive.\n", METADATA_FILENAME);
+		return -1;
+	}
+
 	// we need to concatinate the IV + ciphertext + HMAC, in this order first
 	size_t total_bytes = fcontent->n_ciphertext_bytes + len_iv + len_hmac_hash;
 	BYTE content[total_bytes];
 
 	memcpy(content, fcontent->iv, len_iv);
-
 	memcpy(&content[len_iv], fcontent->ciphertext,
 			fcontent->n_ciphertext_bytes);
-
 	memcpy(&content[len_iv + fcontent->n_ciphertext_bytes], fcontent->hmac_hash,
 			len_hmac_hash);
 
@@ -352,24 +503,36 @@ int write_ciphertext_to_file(char *base_path, char *archive,
 		free(file_path);
 		return -1;
 	}
+
 	free(file_path);
 	return 0;
 }
 
 /**
- * Writes plaintext content stored in a FileContent struct
- * to a plaintext file in the current directory. In order to write
- * the file, the plaintext bytes and the size of the file must not
- * be NULL (other ciphertext information is not required).
+ * Writes a metadata file to the archive, overriding an existing
+ * metadata file.
  *
- * @param fcontent, FileContent containing the parsed components of the
- * 					plaintext file.
+ * @param base_path, the base path for where ALL archives are
+ * 					 stored within a user's file system
+ * @param archive, the name of the archive
+ * @param metadata, metadata content to write to file, as pointer to BYTEs
+ * @param len_metadata, the length of the metadata
+ * @return 0 if the action was successful, -1 if there was an error
  */
-int write_plaintext_to_file(FileContent *fcontent) {
-	return write_content_to_file(fcontent->filename, fcontent->plaintext,
-			fcontent->n_plaintext_bytes, "w");
-}
+int write_metadata_file(char *base_path, char *archive, BYTE metadata[],
+		size_t len_metadata) {
 
+	// get the full file path for where the metadata should be saved
+	char *file_path;
+
+	if (!(file_path = get_full_filepath_in_archive(base_path, archive,
+			METADATA_FILENAME))) {
+		printf("Issue encountered creating the full file path.\n");
+		return -1;
+	}
+
+	return write_content_to_file(file_path, metadata, len_metadata, "wb");
+}
 
 /**
  * Deletes a file from an archive, permanently. The method
@@ -387,7 +550,8 @@ int delete_file_from_archive(char *base_path, char *archive, char *filename) {
 	// get full path of where file should be
 	char *file_path;
 	if (!(file_path = get_full_filepath_in_archive(base_path, archive, filename))) {
-		printf("Issue encountered creating the full file path.\n");
+		printf("Issue encountered creating the full file path for file"
+				"to delete.\n");
 		return -1;
 	}
 
@@ -405,7 +569,6 @@ int delete_file_from_archive(char *base_path, char *archive, char *filename) {
 int delete_file(char *file_path) {
 	int del = remove(file_path);
 	if (del) {
-		printf("File did not delete properly. Please check on %s", file_path);
 		return -1;
 	}
 	return 0;
@@ -557,8 +720,7 @@ int extract_file_content(char *file_path, BYTE **content) {
 	FILE *fp = fopen(file_path, "rb");          // open file in binary mode
 
 	if (!fp) {
-		printf("Could not open file at \"%s\". Please make sure you specified "
-				"the filename correctly and retry.\n", file_path);
+		printf("Could not open and read \"%s\".\n", file_path);
 		return -1;
 	}
 
@@ -597,7 +759,6 @@ int write_content_to_file(char *file_path, BYTE *content, size_t n_bytes,
 
 	FILE *fp = fopen(file_path, write_mode);
 	if (!fp) {
-		printf("Couldn't open and write content to file here: %s\n", file_path);
 
 		// when we use "x" in the write mode, it checks to see if the file already exists
 		// hence, the interpretation of a null file pointer is different in this scenario
