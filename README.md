@@ -67,13 +67,13 @@ This encrypted filestore utilizes integrity checking at both the archive level a
 
 The cryptographic key used in the AES encryption and HMAC hashing steps described below is derived from the user-provided password. Upon submission, the user's password is iteratively hashed 10,000 times using SHA-256 hashing. 
 
-### I. AES CBC Encryption
+### II. AES CBC Encryption
 
 In order to encrypt and decrypt files, this project makes use of the Advanced Encryption Standard (AES). AES is a block cipher, taking 16 bytes at a time to produce 16 bytes of ciphertext. Here, cipher block chaining (CBC) mode was used to encrypt the entire plaintext content of a file block by block, with each plaintext block exclusive-ORed (XOR'd) with the previous ciphertext block before encryption. This approach is advantageous because it allows two identifical plaintext blocks to be encrypted differently and thus avoids the dreaded Linux Penguin effect of encryption modes like the electronic code book (ECB) mode. 
 
 The CBC approach requires an initialization vector (IV), an extra block of truly random text, to XOR with the first block of plaintext to produce the first ciphertext block. In this project, a unique IV is generated for each submitted file using `/dev/urandom`. Because the same IV is required for decryption, the unique IV for each file is prepended to the ciphertext and stored in the encrypted file (i.e., IV || ciphertext) within the archive.
 
-### II. Integrity Check with Hash-Based Authentication Code (HMAC)
+### III. Integrity Check with Hash-Based Authentication Code (HMAC)
 
 Hash-based authentication codes (HMAC) are used several times as part of this project as a means of authentication and integrity checking. Here, HMACs were created using the cryptographic key derived from a user's password (`k`) and a set of text (`t`). For this project, the algorithm for calculating the HMAC includes three distinct steps:
 
@@ -85,17 +85,17 @@ Here is HMAC expressed as an equation: `HMAC(ct, k) = H(opad XOR k || (H(ipad XO
 
 HMACs are utilized in three distinct ways:
 
-#### a. Verifying a user's identity
+#### i. Verifying a user's identity
 
 When a new archive is created, an HMAC is generated using the new archive's name as `t` and the password-derived cryptographic key, `k`. This HMAC is sent to the `.metadata` file for the archive, such that it can be re-read from the `.metadata` file from that archive in the future and compared against the HMAC created from the password submitted each time a user attempts to add, extract or delete files. This means that only users that know the password that was used in the initial creation of the archive can make edits to the archive (though anyone may still list the files). Users with the incorrect passwords will get an integrity alert, asking for a different password.
 
-#### b. Verifying the structure of an archive (i.e., filenames)
+#### ii. Verifying the structure of an archive (i.e., filenames, metadata)
 
 In the course of an archive's lifetime, it is possible that an adversary renames or deletes a file in the archive, or even adds a foreign file to the archive. In order to be able to alert archive users of such corruption, each time a file is added or deleted from an archive, a HMAC is generated using a concatination of the names of all the encrypted files in the archive as `t` and the crytographic key. This HMAC is added to the archive's `.metadata` file. The means that each time a user attempts to interact with an archive, this filename-based HMAC can be regenerated and compared to the HMAC stored in the `.metadata` file. If the two HMACs do not match, users are alerted that the archive has an integrity violation.
 
-#### c. Verifying the content of an individual encrypted file
+#### iii. Verifying the content of an individual encrypted file
 
-In order to make sure that the actual content of an individual encrypted file itself is not corrupted or tampered with, an HMAC generated for each file using the file's ciphertext as `t` and the cryptographic key. This HMAC is appended to the ciphertext and stored in the encrypted file (ct || HMAC). This means that when a person attempts to extract their encrypted file from the archive, an integrity check can be made by comparing the initial HMAC assigned to an encrypted file (which is read in from the file on decryption) with the HMAC that is recomputed from ciphertext read in from the file store and password-derived cryptographic key. The integrity check fails if the two HMAC hashes do not match. Since users must have submitted the correct password in order to make it to the extraction step (see `a.`), this integrity check fails when a file has been corrupted in storage. Users are alerted of any such integrity violation.  
+In order to make sure that the actual content of an individual encrypted file itself is not corrupted or tampered with, an HMAC generated for each file using the file's ciphertext as `t` and the cryptographic key. This HMAC is appended to the ciphertext and stored in the encrypted file (ct || HMAC). This means that when a person attempts to extract their encrypted file from the archive, an integrity check can be made by comparing the initial HMAC assigned to an encrypted file (which is read in from the file on decryption) with the HMAC that is recomputed from ciphertext read in from the file store and password-derived cryptographic key. The integrity check fails if the two HMAC hashes do not match. Since users must have submitted the correct password in order to make it to the extraction step (see `i.`), this integrity check fails when a file has been corrupted in storage. Users are alerted of any such integrity violation.  
 
 ### III. The "TLDR"
 
