@@ -91,7 +91,7 @@ When a new archive is created, an HMAC is generated using the new archive's name
 
 #### ii. Verifying the structure of an archive (i.e., filenames, metadata)
 
-In the course of an archive's lifetime, it is possible that an adversary renames or deletes a file in the archive, or even adds a foreign file to the archive. In order to be able to alert archive users of such corruption, each time a file is added or deleted from an archive, a HMAC is generated using a concatination of the names of all the encrypted files in the archive as `t` and the second crytopgraphic key, `k`<sub>1</sub>. This HMAC is also added to the archive's `.metadata` file. The means that each time a user attempts to interact with an archive, this filename-based HMAC can be regenerated and compared to the HMAC stored in the `.metadata` file. If the two HMACs do not match, users are alerted that the overall archive has an integrity violation.
+In the course of an archive's lifetime, it is possible that an adversary renames or deletes a file in the archive, or even adds a foreign file to the archive. In order to be able to alert archive users of such corruption, each time a file is added or deleted from an archive, a HMAC is generated using a concatination of the names of all the encrypted files in the archive as `t` with the second crytopgraphic key, `k`<sub>1</sub>. This HMAC is also added to the archive's `.metadata` file. The means that each time a user attempts to interact with an archive, this filename-based HMAC can be regenerated and compared to the HMAC stored in the `.metadata` file. If the two HMACs do not match, users are alerted that the overall archive has an integrity violation.
 
 #### iii. Verifying the content of an individual encrypted file
 
@@ -99,9 +99,9 @@ In order to make sure that the actual content of an individual encrypted file it
 
 ### III. The "TLDR" 
 
-On the archive-level: When an archive is created, a `.metadata` file is created to store two HMAC hashes, one to verify a user's identity and another to validate the structure (i.e., filenames) within the archive. Both HMACs are created with the second cryptographic key derived from a user's password. These are used to provide integrity alerts to users if filenames are changed/deleted/added and prevent unauthorized users from making actions on an archive.
+On the archive-level: When an archive is created, a `.metadata` file is created to store two HMAC hashes, one to verify a user's identity and another to validate the structure (i.e., filenames) within the archive. Both HMACs use the key `k`<sub>1</sub>. These are used to provide integrity alerts to users if filenames are changed/deleted/added and prevent unauthorized users from making actions on an archive.
 
-On the file-level: Each plaintext file receives it's own IV for AES encryption using CBC mode and it's own HMAC hash derived from it's corresponding ciphertext. In order to make decryption and integrity checking possible, each encrypted file in the file store is really a concatination of IV + ciphertext + HMAC, such that the initial IV and HMAC are recoverable for decryption.
+On the file-level: Each plaintext file receives it's own IV for AES encryption using CBC mode and it's own HMAC hash derived from it's corresponding ciphertext using the key `k`. In order to make decryption and integrity checking possible, each encrypted file in the file store is really a concatination of IV + ciphertext + HMAC, such that the initial IV and HMAC are recoverable for decryption.
 
 ## Developer Notes
 
