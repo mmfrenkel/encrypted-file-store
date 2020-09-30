@@ -40,7 +40,8 @@ int main(int argc, char *argv[]) {
 
 	// ------------------- Get Cryptographic Key --------------------//
 
-	if (!(key = create_cryptographic_key(request->password, PW_CRYPT_ITER))) {
+	if (!(key = create_cryptographic_key(request->password,
+			strlen(request->password), PW_CRYPT_ITER))) {
 		free(request);
 		exit(1);
 	}
@@ -175,12 +176,17 @@ int archive_integrity_maintained(char *archive, BYTE *key) {
 /**
  * Updates an archive's metadata. Metadata files in archives
  * contain two critical items for authentication and integrity
- * checking:
+ * checking.
  *
  * (1) HMAC hash based on a hash of the archive's name,
- *     using the cryptographic key
+ *     using a new cryptographic key
  * (2) HMAC hash based on a hash of a concatination of all the filenames
- *     in the archive, using the cryptographic key
+ *     in the archive, using a new cryptographic key
+ *
+ * Note that the these HMAC hashes use a second key, derived from the first
+ * cryptographic key hashed iteratively again 10,000 times. This ensures
+ * that key used for this HMAC code is not the same as the one used for
+ * ciphertext files.
  *
  * @param archive, the name of the archive
  * @param key, crytographic key derived from the user's password
@@ -189,8 +195,16 @@ int archive_integrity_maintained(char *archive, BYTE *key) {
  */
 int update_metadata(char *archive, BYTE *key) {
 
+	// create a new key, derived from the old key
+	BYTE *second_key;
+	if (!(second_key = create_cryptographic_key((char*) key, SHA256_BLOCK_SIZE,
+			SECOND_KEY_ITER))) {
+		printf("Could not generate second key for HMAC.\n");
+		return -1;
+	}
+
 	// calculate key + archive name HMAC
-	BYTE *hmac_user = compute_hmac_256(key, (unsigned char*) archive,
+	BYTE *hmac_user = compute_hmac_256(second_key, (unsigned char*) archive,
 			strlen(archive));
 	if (!hmac_user) {
 		printf("Could not compute hmac for user/archive "
@@ -204,7 +218,7 @@ int update_metadata(char *archive, BYTE *key) {
 		free(hmac_user);
 		return -1;
 	}
-	BYTE *hmac_files = compute_hmac_256(key, (unsigned char*) filenames,
+	BYTE *hmac_files = compute_hmac_256(second_key, (unsigned char*) filenames,
 			strlen(filenames));
 
 	if (!hmac_files) {
@@ -225,6 +239,7 @@ int update_metadata(char *archive, BYTE *key) {
 	int error = write_metadata_file(ARCHIVE_DIR, archive, metadata, len);
 
 	// clean up
+	free(second_key);
 	free(filenames);
 	free(hmac_user);
 	free(hmac_files);

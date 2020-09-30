@@ -13,9 +13,10 @@
 #include "file_io.h"
 
 #define PW_CRYPT_ITER 10000
+#define SECOND_KEY_ITER 10000
 #define KEY_SIZE 256 // key size will always be 256, because we SHA-256 hash the pw to find key
 
-BYTE* create_cryptographic_key(char *pt_password, int iterations);
+BYTE* create_cryptographic_key(char *txt, int n_char, int iterations);
 
 int cbc_aes_encrypt(FileContent *fcontent, BYTE *key);
 

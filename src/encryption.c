@@ -34,7 +34,7 @@ BYTE* get_random(size_t n_bytes);
 /* ------------------------------------------------------ */
 
 /**
- * Converts password submitted by user into a 32 byte (256 bit)
+ * Converts some string of chars into a 32 byte (256 bit)
  * key using a SHA-256 hash function, iteratively applied a
  * specified number of times. Note: this function allocates
  * memory on the heap for this new hash.
@@ -42,30 +42,27 @@ BYTE* get_random(size_t n_bytes);
  * Hash function supplied by Brad Conte, found here:
  * https://github.com/B-Con/crypto-algorithms
  *
- * @param pt_password, the plaintext password submitted by a user
+ * @param txt, some text that should be hashed (i.e., a user's password)
+ * @param n_char, the number of characters, or length of the text
  * @param iterations, the number of iterations of SHA-256 to perform
  * @return the new cryptographic key
  */
-BYTE* create_cryptographic_key(char *pt_password, int iterations) {
+BYTE* create_cryptographic_key(char *txt, int n_char, int iterations) {
 
 	BYTE *new_hash;
 	BYTE *temp;
 
-	// make this temporary memory allocation, as to not delete original pw
-	int len_pt_pw = strlen(pt_password);
-
-	temp = (BYTE*) malloc(sizeof(unsigned char) * (len_pt_pw + 1));
+	temp = (BYTE*) malloc(sizeof(unsigned char) * (n_char + 1));
 	if (!temp) {
 		printf("Failed to allocate memory for temporary hash storage.\n ");
 		return NULL;
 	}
-	strncpy((char* ) temp, pt_password, len_pt_pw);
+	strncpy((char* ) temp, txt, n_char);
 
 	// repeatedly run sha-256 hash function
 	for (int i = 0; i < iterations; i++) {
-		if (!(new_hash = hash_sha_256(temp, len_pt_pw))) {
-			printf("Unable to create cryptographic key from "
-					"submitted password.\n");
+		if (!(new_hash = hash_sha_256(temp, n_char))) {
+			printf("Unable to create cryptographic key from submitted text.\n");
 			free(temp);
 			return NULL;
 		}
@@ -368,7 +365,10 @@ int assign_ciphertext_hmac_256(FileContent *fcontent, BYTE *key) {
  * resulting HMAC hash to the HMAC hash stored in the archive
  * metadata, it is possible to tell whether a user
  * has the capability of interacting with a specific archive
- * (i.e., did the submit the correct password?).
+ * (i.e., did the submit the correct password?). Note that the key
+ * used for the HMAC is the cryptographic key after another 10,000
+ * iterations of SHA-256. This ensures that the same key is not used
+ * for the HMAC of the ciphertext files.
  *
  * Recall: Metadata for achives is a concatination of two HMAC
  * hashes where the first is for user authentication.
@@ -381,7 +381,17 @@ int assign_ciphertext_hmac_256(FileContent *fcontent, BYTE *key) {
  */
 int authenticate_user_for_archive(char *archive, BYTE *key, BYTE *metadata) {
 
-	BYTE *hmac_hash = compute_hmac_256(key, (unsigned char*) archive,
+	// create a new key, that is the cryptographic key provided,
+	// but after 10,000 more iterations
+	BYTE *second_key;
+	if (!(second_key = create_cryptographic_key((char*) key, SHA256_BLOCK_SIZE,
+			SECOND_KEY_ITER))) {
+		printf("Could not generate second key for HMAC to authenticate "
+				"user from metadata.\n");
+		return -1;
+	}
+
+	BYTE *hmac_hash = compute_hmac_256(second_key, (unsigned char*) archive,
 			strlen(archive));
 
 	if (!hmac_hash) {
@@ -393,7 +403,9 @@ int authenticate_user_for_archive(char *archive, BYTE *key, BYTE *metadata) {
 	// key with the one stored in the archive's metadata file
 	int invalid =  memcmp(hmac_hash, metadata, SHA256_BLOCK_SIZE) ? 1 : 0;
 
-	free(hmac_hash); // clean up
+	// clean up
+	free(hmac_hash);
+	free(second_key);
 	return invalid;
 }
 
@@ -404,7 +416,10 @@ int authenticate_user_for_archive(char *archive, BYTE *key, BYTE *metadata) {
  * password submission. By comparing the resulting HMAC hash
  * to the HMAC hash stored in the archive metadata, we can see
  * if any of the files in the archive have been deleted or renamed
- * or if any other files have been added.
+ * or if any other files have been added. Note that the key
+ * used for the HMAC is the cryptographic key after another 10,000
+ * iterations of SHA-256. This ensures that the same key is not used
+ * for the HMAC of the ciphertext files.
  *
  * Recall: Each metadata file for achives is a concatination of two HMAC
  * hashes, where the second hash is used for archive filename integrity.
@@ -417,7 +432,17 @@ int authenticate_user_for_archive(char *archive, BYTE *key, BYTE *metadata) {
  */
 int verify_archive_contents(BYTE *key, BYTE *metadata, char *filenames) {
 
-	BYTE *hmac_hash = compute_hmac_256(key, (unsigned char*) filenames,
+	// create a new key, that is the cryptographic key provided,
+	// but after 10,000 more iterations
+	BYTE *second_key;
+	if (!(second_key = create_cryptographic_key((char*) key, SHA256_BLOCK_SIZE,
+			SECOND_KEY_ITER))) {
+		printf("Could not generate second key for HMAC to authenticate "
+				"filestore content from metadata.\n");
+		return -1;
+	}
+
+	BYTE *hmac_hash = compute_hmac_256(second_key, (unsigned char*) filenames,
 			strlen(filenames));
 
 	if (!hmac_hash) {
@@ -431,7 +456,9 @@ int verify_archive_contents(BYTE *key, BYTE *metadata, char *filenames) {
 	int invalid =  memcmp(hmac_hash, &metadata[SHA256_BLOCK_SIZE],
 			SHA256_BLOCK_SIZE) ? 1 : 0;
 
-	free(hmac_hash); // clean up
+	// clean up
+	free(hmac_hash);
+	free(second_key);
 	return invalid;
 }
 

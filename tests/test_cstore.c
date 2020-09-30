@@ -32,7 +32,7 @@ BYTE hmac_hash[SHA256_BLOCK_SIZE] = { 0xb6, 0x38, 0x5, 0xba, 0xcb, 0xd7, 0xf1,
 
 int test_convert_password_to_cryptographic_key() {
 
-	BYTE *encrypted_pass = create_cryptographic_key(password, iterations);
+	BYTE *encrypted_pass = create_cryptographic_key(password, strlen(password), iterations);
 
 	// 0 is a "not failed"
 	int failed = memcmp(encrypted_pass, key, SHA256_BLOCK_SIZE);
